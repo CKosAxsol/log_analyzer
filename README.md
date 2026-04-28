@@ -1,6 +1,6 @@
-# CSV Voltage Analyzer
+# CSV Log Analyzer
 
-Kleines Python-CLI zum Auswerten von APS/APU-CSV-Dateien aus dem Terminal. Das Skript liest die gewuenschten Datensaetze ein, erstellt Spannungsplots als PNG und gibt einfache Kennzahlen in der Konsole aus.
+Kleines Python-CLI zum Auswerten von CSV-Log-Dateien aus dem Terminal. Das Skript liest die gewuenschten Datensaetze ein, erstellt Plots als PNG und gibt einfache Kennzahlen in der Konsole aus.
 
 ## Features
 
@@ -26,6 +26,38 @@ Fuer spaetere Wartung gibt es zusaetzliche Projektdokumentation:
 - [Funktions-Abhaengigkeiten](docs/function_dependencies.md)
 
 ## Aufruf
+
+### Interaktiver Plotter
+
+Fuer eine grafische Auswahl von CSV-Datei, Datensatz und Spalten:
+
+```powershell
+python .\plotter\csv_plotter.py
+```
+
+Das Tool bietet:
+
+- Dateiauswahl fuer beliebige CSV-Dateien
+- Unterstuetzung fuer das bisherige APS/APU-Mehrblockformat
+- Unterstuetzung fuer normale CSV-Dateien mit einer Header-Zeile
+- automatische Erkennung einer Zeitspalte bei Standard-CSV-Dateien
+- waehlbare X-Achse bei allen CSV-Dateien: Zeilennummer oder beliebige CSV-Spalte
+- Auswahl von `Record Type` und `System` bei APS/APU-Dateien
+- Auswahl der vorhandenen numerischen Spalten
+- interaktiven Plot mit Toolbar fuer Zoom, Pan und Reset
+- X-Achse mit Datum und Uhrzeit
+
+Fuer Standard-CSV-Dateien gilt:
+
+- die erste Zeile wird als Header interpretiert
+- plottbar sind alle Spalten, die numerische Werte enthalten
+- erkannte Zeitspalten koennen z. B. `timestamp`, `time`, `datetime`, `date`, `Datum` oder `Zeit` heissen
+- die X-Achse kann auf `Zeilennummer`, eine Zeitspalte, eine numerische Spalte oder eine Textspalte gesetzt werden
+
+Fuer APS/APU-Dateien gilt:
+
+- `Record Type` und `System` waehlen weiter den Datenblock aus
+- die X-Achse kann auf `Zeilennummer`, `TimeStamp` oder eine beliebige Spalte des gewaehlten Record Types gesetzt werden
 
 ### Plot-Analyse
 
@@ -71,38 +103,6 @@ python .\scripts\peak_finder.py `
   --time-end "2026-04-24 12:00:00"
 ```
 
-### Interaktiver Plotter
-
-Fuer eine grafische Auswahl von CSV-Datei, Datensatz und Spalten:
-
-```powershell
-python .\plotter\csv_plotter.py
-```
-
-Das Tool bietet:
-
-- Dateiauswahl fuer beliebige CSV-Dateien
-- Unterstuetzung fuer das bisherige APS/APU-Mehrblockformat
-- Unterstuetzung fuer normale CSV-Dateien mit einer Header-Zeile
-- automatische Erkennung einer Zeitspalte bei Standard-CSV-Dateien
-- waehlbare X-Achse bei allen CSV-Dateien: Zeilennummer oder beliebige CSV-Spalte
-- Auswahl von `Record Type` und `System` bei APS/APU-Dateien
-- Auswahl der vorhandenen numerischen Spalten
-- interaktiven Plot mit Toolbar fuer Zoom, Pan und Reset
-- X-Achse mit Datum und Uhrzeit
-
-Fuer Standard-CSV-Dateien gilt:
-
-- die erste Zeile wird als Header interpretiert
-- plottbar sind alle Spalten, die numerische Werte enthalten
-- erkannte Zeitspalten koennen z. B. `timestamp`, `time`, `datetime`, `date`, `Datum` oder `Zeit` heissen
-- die X-Achse kann auf `Zeilennummer`, eine Zeitspalte, eine numerische Spalte oder eine Textspalte gesetzt werden
-
-Fuer APS/APU-Dateien gilt:
-
-- `Record Type` und `System` waehlen weiter den Datenblock aus
-- die X-Achse kann auf `Zeilennummer`, `TimeStamp` oder eine beliebige Spalte des gewaehlten Record Types gesetzt werden
-
 ## Wichtige Parameter
 
 - `files`: eine oder mehrere CSV-Dateien
@@ -135,8 +135,3 @@ Standard-Ausgabeordner:
 ```text
 scripts/output
 ```
-
-## Hinweise fuer GitHub
-
-- Die erzeugten Plot-Dateien sind per `.gitignore` ausgeschlossen.
-- Der Ordner kann direkt als kleines CLI-Hilfstool versioniert werden.

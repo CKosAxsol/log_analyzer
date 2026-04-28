@@ -25,6 +25,12 @@ except ImportError as exc:
         "Missing dependency: tkinter. Install Python with Tcl/Tk support to run csv_plotter.py."
     ) from exc
 
+try:
+    from tkinterdnd2 import DND_FILES, TkinterDnD  # noqa: E402
+except ImportError:
+    DND_FILES = None
+    TkinterDnD = None
+
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk  # noqa: E402
 from matplotlib import dates as mdates  # noqa: E402
 from matplotlib.figure import Figure  # noqa: E402
@@ -95,6 +101,7 @@ class CsvPlotterApp:
         self.status_var = tk.StringVar(value="CSV laden, dann Record Type, System und Spalten waehlen.")
         self.has_plot = False
         self.theme_name = "light"
+        self.drop_label: ttk.Label | None = None
 
         self._build_menu()
         self._configure_styles()
@@ -186,43 +193,52 @@ class CsvPlotterApp:
             style="Panel.TLabel",
         ).grid(row=2, column=0, sticky="w")
 
-        ttk.Label(controls, text="Trennzeichen", style="Panel.TLabel").grid(row=3, column=0, sticky="w", pady=(16, 0))
-        delimiter_entry = ttk.Entry(controls, textvariable=self.delimiter_var, width=8)
-        delimiter_entry.grid(row=4, column=0, sticky="w", pady=(4, 0))
+        self.drop_label = ttk.Label(
+            controls,
+            text="CSV hier ins Fenster ziehen oder ueber 'Datei oeffnen' laden.",
+            wraplength=320,
+            justify=tk.LEFT,
+            style="Panel.TLabel",
+        )
+        self.drop_label.grid(row=3, column=0, sticky="ew", pady=(12, 0))
 
-        ttk.Label(controls, text="Record Type", style="Panel.TLabel").grid(row=5, column=0, sticky="w", pady=(16, 0))
+        ttk.Label(controls, text="Trennzeichen", style="Panel.TLabel").grid(row=4, column=0, sticky="w", pady=(16, 0))
+        delimiter_entry = ttk.Entry(controls, textvariable=self.delimiter_var, width=8)
+        delimiter_entry.grid(row=5, column=0, sticky="w", pady=(4, 0))
+
+        ttk.Label(controls, text="Record Type", style="Panel.TLabel").grid(row=6, column=0, sticky="w", pady=(16, 0))
         self.record_type_box = ttk.Combobox(
             controls,
             textvariable=self.record_type_var,
             state="readonly",
             width=38,
         )
-        self.record_type_box.grid(row=6, column=0, sticky="ew", pady=(4, 0))
+        self.record_type_box.grid(row=7, column=0, sticky="ew", pady=(4, 0))
         self.record_type_box.bind("<<ComboboxSelected>>", self.on_record_type_changed)
 
-        ttk.Label(controls, text="System", style="Panel.TLabel").grid(row=7, column=0, sticky="w", pady=(16, 0))
+        ttk.Label(controls, text="System", style="Panel.TLabel").grid(row=8, column=0, sticky="w", pady=(16, 0))
         self.system_box = ttk.Combobox(
             controls,
             textvariable=self.system_name_var,
             state="readonly",
             width=38,
         )
-        self.system_box.grid(row=8, column=0, sticky="ew", pady=(4, 0))
+        self.system_box.grid(row=9, column=0, sticky="ew", pady=(4, 0))
         self.system_box.bind("<<ComboboxSelected>>", self.on_system_changed)
 
-        ttk.Label(controls, text="X-Achse", style="Panel.TLabel").grid(row=9, column=0, sticky="w", pady=(16, 0))
+        ttk.Label(controls, text="X-Achse", style="Panel.TLabel").grid(row=10, column=0, sticky="w", pady=(16, 0))
         self.x_axis_box = ttk.Combobox(
             controls,
             textvariable=self.x_axis_var,
             state="readonly",
             width=38,
         )
-        self.x_axis_box.grid(row=10, column=0, sticky="ew", pady=(4, 0))
+        self.x_axis_box.grid(row=11, column=0, sticky="ew", pady=(4, 0))
 
-        ttk.Label(controls, text="Spalten", style="Panel.TLabel").grid(row=11, column=0, sticky="w", pady=(16, 0))
+        ttk.Label(controls, text="Spalten", style="Panel.TLabel").grid(row=12, column=0, sticky="w", pady=(16, 0))
         list_frame = ttk.Frame(controls, style="Panel.TFrame")
-        list_frame.grid(row=12, column=0, sticky="nsew", pady=(4, 0))
-        controls.rowconfigure(12, weight=1)
+        list_frame.grid(row=13, column=0, sticky="nsew", pady=(4, 0))
+        controls.rowconfigure(13, weight=1)
         list_frame.rowconfigure(0, weight=1)
         list_frame.columnconfigure(0, weight=1)
 
@@ -241,7 +257,7 @@ class CsvPlotterApp:
         self.column_list.configure(yscrollcommand=scrollbar.set)
 
         button_row = ttk.Frame(controls)
-        button_row.grid(row=13, column=0, sticky="ew", pady=(12, 0))
+        button_row.grid(row=14, column=0, sticky="ew", pady=(12, 0))
         button_row.columnconfigure(0, weight=1)
         button_row.columnconfigure(1, weight=1)
         ttk.Button(button_row, text="Alle waehlen", command=self.select_all_columns).grid(
@@ -252,7 +268,7 @@ class CsvPlotterApp:
         )
 
         ttk.Button(controls, text="Plot anzeigen", command=self.plot_selected_columns).grid(
-            row=14, column=0, sticky="ew", pady=(12, 0)
+            row=15, column=0, sticky="ew", pady=(12, 0)
         )
         ttk.Label(
             controls,
@@ -260,7 +276,7 @@ class CsvPlotterApp:
             wraplength=320,
             justify=tk.LEFT,
             style="Panel.TLabel",
-        ).grid(row=15, column=0, sticky="w", pady=(12, 0))
+        ).grid(row=16, column=0, sticky="w", pady=(12, 0))
 
         plot_frame = ttk.Frame(main)
         plot_frame.grid(row=0, column=1, sticky="nsew")
@@ -287,6 +303,25 @@ class CsvPlotterApp:
 
         status_bar = ttk.Label(main, textvariable=self.status_var, anchor="w", style="Status.TLabel")
         status_bar.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(8, 0))
+
+        self._enable_drag_and_drop(main, controls, plot_frame, self.canvas.get_tk_widget(), status_bar)
+
+    def _enable_drag_and_drop(self, *widgets: tk.Widget) -> None:
+        """Enable dropping CSV files onto the application window."""
+        if DND_FILES is None:
+            self.status_var.set("Drag & Drop nicht verfuegbar. tkinterdnd2 konnte nicht geladen werden.")
+            return
+
+        for widget in widgets:
+            widget.drop_target_register(DND_FILES)
+            widget.dnd_bind("<<Drop>>", self._on_file_dropped)
+
+    def _on_file_dropped(self, event: object) -> None:
+        """Load the first dropped CSV file."""
+        dropped_files = self.root.tk.splitlist(event.data)
+        if not dropped_files:
+            return
+        self.load_csv_path(dropped_files[0])
 
     def _style_axes(self) -> None:
         """Apply the dark plot palette to the current axes."""
@@ -341,7 +376,19 @@ class CsvPlotterApp:
         if not file_name:
             return
 
-        self.csv_path = Path(file_name)
+        self.load_csv_path(file_name)
+
+    def load_csv_path(self, file_path: str | Path) -> None:
+        """Load a CSV file from a path and refresh the selector widgets."""
+        path = Path(file_path)
+        if path.suffix.lower() != ".csv":
+            messagebox.showwarning("Keine CSV", "Bitte eine CSV-Datei ablegen oder auswaehlen.")
+            return
+        if not path.exists():
+            messagebox.showerror("Datei nicht gefunden", str(path))
+            return
+
+        self.csv_path = path
         self.file_var.set(str(self.csv_path))
 
         try:
@@ -922,7 +969,10 @@ class CsvPlotterApp:
 
 def main() -> int:
     """Start the desktop application."""
-    root = tk.Tk()
+    if TkinterDnD is not None:
+        root = TkinterDnD.Tk()
+    else:
+        root = tk.Tk()
     CsvPlotterApp(root)
     root.mainloop()
     return 0
