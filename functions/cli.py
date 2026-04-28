@@ -45,7 +45,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--output-dir",
-        default="scripts/output",
+        default="output",
         help="Directory for generated PNG plots. Default: %(default)s",
     )
     parser.add_argument("--title", default=None, help="Optional custom title for the plot.")

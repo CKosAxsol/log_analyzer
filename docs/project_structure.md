@@ -4,6 +4,14 @@ Diese Datei ist als schneller Einstieg fuer spaetere Wartung gedacht.
 
 ## Ordner
 
+### `main/`
+
+Einstiegspunkte fuer die direkt ausfuehrbaren Tools:
+
+- `log_analyzer.py`: Terminal-Tool fuer Plot-Ausgabe als PNG
+- `peak_finder.py`: Terminal-Tool fuer Schwellwertsuche
+- `csv_plotter.py`: GUI-Anwendung fuer interaktive CSV-Auswahl und Plot-Darstellung
+
 ### `functions/`
 
 Gemeinsame Logik fuer:
@@ -13,16 +21,6 @@ Gemeinsame Logik fuer:
 - Plotten
 - Schwellwerte finden
 - Konsolen-Ausgaben erzeugen
-
-### `plotter/`
-
-GUI-Anwendung fuer interaktive Auswahl von:
-
-- Datei
-- Record Type
-- System
-- X-Achse
-- Y-Spalten
 
 ### `input/`
 
@@ -37,15 +35,15 @@ Technische Dokumentation fuer Menschen, die das Projekt spaeter pflegen:
 
 ## Wichtigste Dateien
 
-### `log_analyzer.py`
+### `main/log_analyzer.py`
 
 Erzeugt PNG-Plots aus der Kommandozeile.
 
-### `peak_finder.py`
+### `main/peak_finder.py`
 
 Findet Schwellwert-Ueber- und -Unterschreitungen.
 
-### `csv_plotter.py`
+### `main/csv_plotter.py`
 
 Interaktive GUI fuer CSV-Dateien.
 

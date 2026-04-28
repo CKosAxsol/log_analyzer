@@ -7,15 +7,15 @@ voneinander abhaengen und welche Aufgabe sie im Gesamtablauf haben.
 
 Es gibt drei Einstiegspunkte:
 
-- `log_analyzer.py`
-- `peak_finder.py`
-- `csv_plotter.py`
+- `main/log_analyzer.py`
+- `main/peak_finder.py`
+- `main/csv_plotter.py`
 
 Die ersten beiden sind Terminal-Programme. Der Plotter ist eine kleine GUI.
 
 ## 2. Abhaengigkeiten der Terminal-Tools
 
-### `log_analyzer.py`
+### `main/log_analyzer.py`
 
 Verantwortung:
 
@@ -29,7 +29,7 @@ Verantwortung:
 Abhaengigkeiten:
 
 ```text
-log_analyzer.py
+main/log_analyzer.py
  -> functions.cli.parse_args
  -> functions.path_utils.resolve_csv_path
  -> functions.dependencies.ensure_dependencies
@@ -40,7 +40,7 @@ log_analyzer.py
  -> functions.reporting.print_summary
 ```
 
-### `peak_finder.py`
+### `main/peak_finder.py`
 
 Verantwortung:
 
@@ -54,7 +54,7 @@ Verantwortung:
 Abhaengigkeiten:
 
 ```text
-peak_finder.py
+main/peak_finder.py
  -> parse_args
  -> validate_threshold_args
  -> functions.path_utils.resolve_csv_path
@@ -67,7 +67,7 @@ peak_finder.py
 
 ## 3. Abhaengigkeiten der GUI
 
-### `csv_plotter.py`
+### `main/csv_plotter.py`
 
 Verantwortung:
 
@@ -80,7 +80,7 @@ Verantwortung:
 Abhaengigkeiten:
 
 ```text
-csv_plotter.py
+main/csv_plotter.py
  -> functions.dependencies.ensure_dependencies
  -> functions.csv_parser.open_csv_with_fallbacks
  -> functions.csv_parser.TIMESTAMP_COLUMN
@@ -228,7 +228,7 @@ functions.path_utils
 
 Verantwortung:
 
-- CLI-Argumente fuer `log_analyzer.py` definieren
+- CLI-Argumente fuer `main/log_analyzer.py` definieren
 
 Aktuell genutzt von:
 
@@ -276,6 +276,6 @@ CSV-Datei
 - Wenn sich das APS/APU-Dateiformat aendert, zuerst `functions/csv_parser.py`
   und die strukturierten Leser im Plotter pruefen.
 - Wenn sich nur das Plot-Verhalten aendert, moeglichst `functions/plotting.py`
-  oder `csv_plotter.py` aendern, nicht den Parser.
+  oder `main/csv_plotter.py` aendern, nicht den Parser.
 - Wenn neue gemeinsame Daten gebraucht werden, zuerst pruefen, ob sie in
   `ParsedSeries` oder in einem neuen Dataclass-Modell sauberer aufgehoben sind.

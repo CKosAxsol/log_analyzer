@@ -50,7 +50,7 @@ Wenn dabei ein Fehler kommt, ist meist nicht `pip` das Problem, sondern die Pyth
 Aus dem Projektverzeichnis:
 
 ```powershell
-python .\plotter\csv_plotter.py
+python .\main\csv_plotter.py
 ```
 
 ## Kurzfassung
@@ -59,5 +59,5 @@ Wenn Python schon installiert ist, reicht normalerweise:
 
 ```powershell
 python -m pip install matplotlib
-python .\plotter\csv_plotter.py
+python .\main\csv_plotter.py
 ```

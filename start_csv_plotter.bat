@@ -9,6 +9,4 @@ call .venv\Scripts\activate.bat
 
 python -m pip install --upgrade pip
 
-python csv_plotter.py
-
-pause
+python main\csv_plotter.py
