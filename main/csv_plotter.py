@@ -34,36 +34,24 @@ except ImportError:
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk  # noqa: E402
 from matplotlib import dates as mdates  # noqa: E402
 from matplotlib.figure import Figure  # noqa: E402
-
-
-THEMES = {
-    "dark": {
-        "bg": "#1e1e1e",
-        "panel": "#252526",
-        "input": "#2d2d30",
-        "text": "#f3f3f3",
-        "muted_text": "#c8c8c8",
-        "accent": "#0e639c",
-        "grid": "#4a4a4a",
-        "plot_bg": "#202124",
-        "axis": "#d6d6d6",
-        "button_active": "#1177bb",
-        "button_pressed": "#0b4f79",
-    },
-    "light": {
-        "bg": "#f3f3f3",
-        "panel": "#e8e8e8",
-        "input": "#ffffff",
-        "text": "#1f1f1f",
-        "muted_text": "#555555",
-        "accent": "#d9e8f5",
-        "grid": "#c7c7c7",
-        "plot_bg": "#ffffff",
-        "axis": "#222222",
-        "button_active": "#c8def1",
-        "button_pressed": "#b2d0ea",
-    },
-}
+from functions.csv_plotter_export import get_export_row_indices, write_plot_export  # noqa: E402
+from functions.csv_plotter_interactions import (  # noqa: E402
+    find_nearest_point,
+    is_left_mouse_button,
+    is_middle_mouse_button,
+    pan_axes_from_drag,
+    zoom_axes_around_cursor,
+)
+from functions.csv_plotter_utils import (  # noqa: E402
+    XValue,
+    convert_x_values,
+    detect_timestamp_column,
+    format_x_value,
+    get_row_value,
+    is_float_row_value,
+    normalize_header,
+)
+from functions.csv_plotter_theme import THEMES  # noqa: E402
 
 
 class CsvPlotterApp:
@@ -102,6 +90,13 @@ class CsvPlotterApp:
         self.has_plot = False
         self.theme_name = "light"
         self.drop_label: ttk.Label | None = None
+        self.picker_annotation = None
+        self.picker_marker = None
+        self.current_plot_columns: list[str] = []
+        self.current_x_values: list[XValue] = []
+        self.current_series_map: dict[str, list[float]] = {}
+        self.current_x_label = "X"
+        self.middle_pan_start: tuple[float, float, tuple[float, float], tuple[float, float]] | None = None
 
         self._build_menu()
         self._configure_styles()
@@ -111,6 +106,17 @@ class CsvPlotterApp:
     def _build_menu(self) -> None:
         """Create the application menu."""
         menu_bar = tk.Menu(self.root)
+
+        datei_menu = tk.Menu(menu_bar, tearoff=False)
+        export_menu = tk.Menu(datei_menu, tearoff=False)
+        export_menu.add_command(label="Gesamten Plot exportieren", command=lambda: self.export_current_plot("all"))
+        export_menu.add_command(
+            label="Sichtbaren Ausschnitt exportieren",
+            command=lambda: self.export_current_plot("visible"),
+        )
+        datei_menu.add_cascade(label="Export", menu=export_menu)
+        menu_bar.add_cascade(label="Datei", menu=datei_menu)
+
         ansicht_menu = tk.Menu(menu_bar, tearoff=False)
         ansicht_menu.add_command(label="Dark Mode", command=lambda: self.set_theme("dark"))
         ansicht_menu.add_command(label="Light Mode", command=lambda: self.set_theme("light"))
@@ -293,6 +299,10 @@ class CsvPlotterApp:
         self.canvas = FigureCanvasTkAgg(self.figure, master=plot_frame)
         self.canvas.get_tk_widget().grid(row=0, column=0, sticky="nsew")
         self.canvas.get_tk_widget().configure(highlightthickness=0)
+        self.canvas.mpl_connect("button_press_event", self._on_plot_clicked)
+        self.canvas.mpl_connect("scroll_event", self._on_mousewheel_zoom)
+        self.canvas.mpl_connect("motion_notify_event", self._on_middle_pan_motion)
+        self.canvas.mpl_connect("button_release_event", self._on_middle_pan_release)
 
         toolbar_frame = ttk.Frame(plot_frame)
         toolbar_frame.grid(row=1, column=0, sticky="ew")
@@ -347,6 +357,7 @@ class CsvPlotterApp:
             selectforeground=colors["text"],
         )
         self.canvas.get_tk_widget().configure(bg=colors["plot_bg"])
+        self._style_picker_artists()
 
     def set_theme(self, theme_name: str) -> None:
         """Switch between light and dark UI themes."""
@@ -364,6 +375,19 @@ class CsvPlotterApp:
                 text.set_color(THEMES[self.theme_name]["text"])
         self.canvas.draw_idle()
         self.status_var.set(f"Darstellung auf {theme_name} Modus umgestellt.")
+
+    def _style_picker_artists(self) -> None:
+        """Update picker annotation and marker colors to match the current theme."""
+        colors = THEMES[self.theme_name]
+        if self.picker_annotation is not None:
+            self.picker_annotation.get_bbox_patch().set_facecolor(colors["input"])
+            self.picker_annotation.get_bbox_patch().set_edgecolor(colors["grid"])
+            self.picker_annotation.get_bbox_patch().set_alpha(0.95)
+            self.picker_annotation.get_arrow_patch().set_color(colors["grid"])
+            self.picker_annotation.set_color(colors["text"])
+        if self.picker_marker is not None:
+            self.picker_marker.set_markerfacecolor(colors["accent"])
+            self.picker_marker.set_markeredgecolor(colors["axis"])
 
     def open_file(self) -> None:
         """Prompt for a CSV file and populate record/system/column selectors."""
@@ -525,7 +549,7 @@ class CsvPlotterApp:
             if header is None:
                 raise ValueError("Die CSV-Datei ist leer.")
 
-            normalized_header = self._normalize_header(header)
+            normalized_header = normalize_header(header)
             if not normalized_header:
                 raise ValueError("Die CSV-Datei enthaelt keine gueltige Header-Zeile.")
 
@@ -533,13 +557,13 @@ class CsvPlotterApp:
 
         self.csv_mode = "plain"
         self.plain_columns = normalized_header
-        self.timestamp_column = self._detect_timestamp_column(normalized_header, sample_rows)
+        self.timestamp_column = detect_timestamp_column(normalized_header, sample_rows)
 
         numeric_columns: list[str] = []
         for index, column_name in enumerate(normalized_header):
             if column_name == self.timestamp_column:
                 continue
-            if any(self._is_float_row_value(row, index) for row in sample_rows):
+            if any(is_float_row_value(row, index) for row in sample_rows):
                 numeric_columns.append(column_name)
 
         if not numeric_columns:
@@ -650,6 +674,7 @@ class CsvPlotterApp:
 
         self.axes.clear()
         self._style_axes()
+        self._clear_picker_artists()
         for column in selected_columns:
             self.axes.plot(x_values, series_map[column], label=column, linewidth=1.2)
 
@@ -670,10 +695,195 @@ class CsvPlotterApp:
         self.canvas.draw_idle()
         self.toolbar.update()
         self.has_plot = True
+        self.current_plot_columns = selected_columns
+        self.current_x_values = x_values
+        self.current_series_map = series_map
+        self.current_x_label = x_label
 
         self.status_var.set(
             f"Plot aktualisiert: {len(selected_columns)} Spalten, {len(x_values)} Datenpunkte."
         )
+
+    def export_current_plot(self, export_scope: str) -> None:
+        """Export the currently plotted data to a standalone CSV file."""
+        if not self.has_plot or not self.current_x_values or not self.current_plot_columns:
+            messagebox.showwarning("Kein Plot", "Bitte zuerst einen Plot erstellen.")
+            return
+
+        row_indices = get_export_row_indices(
+            export_scope,
+            self.current_x_values,
+            self.current_series_map,
+            self.current_plot_columns,
+            self.axes.get_xlim(),
+            self.axes.get_ylim(),
+            self._to_plot_coordinate,
+        )
+        if not row_indices:
+            messagebox.showwarning("Keine Daten", "Im gewaehlten Exportbereich liegen keine Datenpunkte.")
+            return
+
+        default_name = "plot_export.csv"
+        if self.csv_path is not None:
+            suffix = "sichtbar" if export_scope == "visible" else "gesamt"
+            default_name = f"{self.csv_path.stem}_{suffix}.csv"
+
+        output_path = filedialog.asksaveasfilename(
+            title="Plot als CSV exportieren",
+            defaultextension=".csv",
+            initialdir=str(ROOT_DIR / "output" if (ROOT_DIR / "output").exists() else ROOT_DIR),
+            initialfile=default_name,
+            filetypes=[("CSV-Dateien", "*.csv"), ("Alle Dateien", "*.*")],
+        )
+        if not output_path:
+            return
+
+        try:
+            write_plot_export(
+                Path(output_path),
+                self._get_delimiter(),
+                self.current_x_label,
+                self.current_x_values,
+                self.current_plot_columns,
+                self.current_series_map,
+                row_indices,
+            )
+        except Exception as exc:
+            messagebox.showerror("Export fehlgeschlagen", str(exc))
+            self.status_var.set("CSV-Export konnte nicht erstellt werden.")
+            return
+
+        self.status_var.set(f"CSV exportiert: {Path(output_path).name} ({len(row_indices)} Datenpunkte).")
+
+    def _clear_picker_artists(self) -> None:
+        """Remove the currently visible picker marker and tooltip from the axes."""
+        if self.picker_annotation is not None:
+            self.picker_annotation.remove()
+            self.picker_annotation = None
+        if self.picker_marker is not None:
+            self.picker_marker.remove()
+            self.picker_marker = None
+
+    def _on_plot_clicked(self, event: object) -> None:
+        """Highlight and describe the nearest plotted point after a mouse click."""
+        if not self.has_plot or event.inaxes != self.axes:
+            return
+        if is_middle_mouse_button(event):
+            self._start_middle_pan(event)
+            return
+        if self.toolbar.mode:
+            return
+        if not is_left_mouse_button(event):
+            return
+        if event.x is None or event.y is None:
+            return
+        if not self.current_x_values or not self.current_plot_columns:
+            return
+
+        nearest = find_nearest_point(
+            self.axes,
+            event.x,
+            event.y,
+            self.current_x_values,
+            self.current_series_map,
+            self.current_plot_columns,
+            self._to_plot_coordinate,
+        )
+        if nearest is None:
+            return
+
+        column_name, point_index, x_value, y_value = nearest
+        self._show_picked_point(column_name, point_index, x_value, y_value)
+
+    def _on_mousewheel_zoom(self, event: object) -> None:
+        """Zoom in/out around the mouse cursor."""
+        if not self.has_plot or event.inaxes != self.axes:
+            return
+        if event.xdata is None or event.ydata is None:
+            return
+
+        zoom_factor = 1 / 1.2 if event.button == "up" else 1.2
+        zoom_axes_around_cursor(self.axes, event.xdata, event.ydata, zoom_factor)
+        self.toolbar.push_current()
+        self.canvas.draw_idle()
+
+    def _start_middle_pan(self, event: object) -> None:
+        """Store the current view before middle-button drag panning starts."""
+        if event.x is None or event.y is None:
+            return
+        self.middle_pan_start = (event.x, event.y, self.axes.get_xlim(), self.axes.get_ylim())
+
+    def _on_middle_pan_motion(self, event: object) -> None:
+        """Pan the plot while the middle mouse button is dragged."""
+        if self.middle_pan_start is None or not self.has_plot:
+            return
+        if event.inaxes != self.axes or event.x is None or event.y is None:
+            return
+
+        start_x, start_y, start_xlim, start_ylim = self.middle_pan_start
+        if pan_axes_from_drag(self.axes, start_x, start_y, event.x, event.y, start_xlim, start_ylim):
+            self.canvas.draw_idle()
+
+    def _on_middle_pan_release(self, event: object) -> None:
+        """Finish middle-button drag panning and add the view to the toolbar history."""
+        if self.middle_pan_start is None:
+            return
+        if is_middle_mouse_button(event):
+            self.toolbar.push_current()
+            self.middle_pan_start = None
+
+    def _show_picked_point(
+        self,
+        column_name: str,
+        point_index: int,
+        x_value: datetime | int | float | str,
+        y_value: float,
+    ) -> None:
+        """Draw a marker plus tooltip for the selected point and mirror it to the status bar."""
+        self._clear_picker_artists()
+        colors = THEMES[self.theme_name]
+
+        self.picker_marker = self.axes.plot(
+            [x_value],
+            [y_value],
+            marker="o",
+            markersize=7,
+            linestyle="None",
+            markerfacecolor=colors["accent"],
+            markeredgecolor=colors["axis"],
+            markeredgewidth=1.0,
+            zorder=5,
+        )[0]
+
+        tooltip_text = (
+            f"{column_name}\n"
+            f"Punkt: {point_index + 1}\n"
+            f"X: {format_x_value(x_value)}\n"
+            f"Y: {y_value:g}"
+        )
+        self.picker_annotation = self.axes.annotate(
+            tooltip_text,
+            xy=(x_value, y_value),
+            xytext=(12, 12),
+            textcoords="offset points",
+            bbox={"boxstyle": "round,pad=0.3", "fc": colors["input"], "ec": colors["grid"], "alpha": 0.95},
+            arrowprops={"arrowstyle": "->", "color": colors["grid"]},
+            color=colors["text"],
+            fontsize=9,
+        )
+        self.canvas.draw_idle()
+        self.status_var.set(
+            f"Messpunkt: {column_name} | Punkt {point_index + 1} | X={format_x_value(x_value)} | Y={y_value:g}"
+        )
+
+    def _to_plot_coordinate(self, x_value: XValue) -> float | int | str:
+        """Convert X values to the numeric representation used by the current Matplotlib axis."""
+        if isinstance(x_value, datetime):
+            return mdates.date2num(x_value)
+        converted = self.axes.xaxis.convert_units(x_value)
+        if hasattr(converted, "item"):
+            return converted.item()
+        return converted
 
     def _load_selected_series(
         self,
@@ -748,7 +958,7 @@ class CsvPlotterApp:
 
                 parsed_values: list[float] = []
                 for column in selected_columns:
-                    value = self._get_row_value(row, header_map[column]).strip()
+                    value = get_row_value(row, header_map[column]).strip()
                     try:
                         parsed_values.append(float(value))
                     except ValueError:
@@ -760,7 +970,7 @@ class CsvPlotterApp:
                 if x_axis_column == self.ROW_INDEX_LABEL:
                     raw_x_values.append(str(len(raw_x_values) + 1))
                 else:
-                    raw_x_value = self._get_row_value(row, header_map[x_axis_column]).strip()
+                    raw_x_value = get_row_value(row, header_map[x_axis_column]).strip()
                     if not raw_x_value:
                         continue
                     raw_x_values.append(raw_x_value)
@@ -773,7 +983,7 @@ class CsvPlotterApp:
                 f"Keine plottbaren Datenzeilen fuer {record_type} / {system_name} gefunden."
             )
 
-        x_values, x_label, _x_is_datetime = self._convert_x_values(raw_x_values, x_axis_column)
+        x_values, x_label, _x_is_datetime = convert_x_values(raw_x_values, x_axis_column, self.ROW_INDEX_LABEL)
         title_suffix = f"{record_type} | {system_name} | X-Achse: {x_label}"
         return x_values, series, title_suffix, x_label
 
@@ -800,7 +1010,7 @@ class CsvPlotterApp:
             if header is None:
                 raise ValueError("Die CSV-Datei ist leer.")
 
-            normalized_header = self._normalize_header(header)
+            normalized_header = normalize_header(header)
             header_map = {name: idx for idx, name in enumerate(normalized_header)}
 
             missing_columns = [column for column in selected_columns if column not in header_map]
@@ -818,7 +1028,7 @@ class CsvPlotterApp:
 
                 parsed_values: list[float] = []
                 for column in selected_columns:
-                    value = self._get_row_value(row, header_map[column]).strip()
+                    value = get_row_value(row, header_map[column]).strip()
                     try:
                         parsed_values.append(float(value))
                     except ValueError:
@@ -831,7 +1041,7 @@ class CsvPlotterApp:
                     row_index += 1
                     raw_x_values.append(str(row_index))
                 else:
-                    raw_x_value = self._get_row_value(row, header_map[x_axis_column]).strip()
+                    raw_x_value = get_row_value(row, header_map[x_axis_column]).strip()
                     if not raw_x_value:
                         continue
                     raw_x_values.append(raw_x_value)
@@ -842,130 +1052,13 @@ class CsvPlotterApp:
         if not raw_x_values:
             raise ValueError("Keine plottbaren Datenzeilen fuer die aktuelle Auswahl gefunden.")
 
-        x_values, x_label, x_is_datetime = self._convert_x_values(raw_x_values, x_axis_column)
+        x_values, x_label, x_is_datetime = convert_x_values(raw_x_values, x_axis_column, self.ROW_INDEX_LABEL)
         title_suffix = "Standard CSV"
         if x_axis_column != self.ROW_INDEX_LABEL:
             title_suffix = f"Standard CSV | X-Achse: {x_axis_column}"
         elif x_is_datetime:
             title_suffix = "Standard CSV | X-Achse: Datum + Zeit"
         return x_values, series, title_suffix, x_label
-
-    def _convert_x_values(
-        self,
-        raw_x_values: list[str],
-        x_axis_column: str,
-    ) -> tuple[list[datetime] | list[int] | list[float] | list[str], str, bool]:
-        """Convert raw X values to datetime, float, or keep them as strings.
-
-        Matplotlib handles these three broad X-axis types differently, so
-        we normalize them once here instead of scattering conversion logic
-        across the parsing code.
-        """
-        if x_axis_column == self.ROW_INDEX_LABEL:
-            return [int(value) for value in raw_x_values], self.ROW_INDEX_LABEL, False
-
-        timestamp_values: list[datetime] = []
-        if all((parsed := self._try_parse_timestamp(value)) is not None for value in raw_x_values):
-            for value in raw_x_values:
-                parsed = self._try_parse_timestamp(value)
-                if parsed is None:
-                    break
-                timestamp_values.append(parsed)
-            if len(timestamp_values) == len(raw_x_values):
-                return timestamp_values, x_axis_column, True
-
-        float_values: list[float] = []
-        try:
-            float_values = [float(value) for value in raw_x_values]
-        except ValueError:
-            return raw_x_values, x_axis_column, False
-        return float_values, x_axis_column, False
-
-    @staticmethod
-    def _normalize_header(header: list[str]) -> list[str]:
-        """Strip header cells and fill empty names with placeholders."""
-        normalized: list[str] = []
-        for index, value in enumerate(header, start=1):
-            stripped = value.strip()
-            normalized.append(stripped if stripped else f"column_{index}")
-        return normalized
-
-    @staticmethod
-    def _get_row_value(row: list[str], index: int) -> str:
-        """Safely return a row value or an empty string when the field is missing."""
-        if index >= len(row):
-            return ""
-        return row[index]
-
-    @classmethod
-    def _is_float_row_value(cls, row: list[str], index: int) -> bool:
-        """Check whether the given cell contains a float-compatible value."""
-        value = cls._get_row_value(row, index).strip()
-        if not value:
-            return False
-        try:
-            float(value)
-        except ValueError:
-            return False
-        return True
-
-    @classmethod
-    def _detect_timestamp_column(
-        cls,
-        header: list[str],
-        sample_rows: list[list[str]],
-    ) -> str | None:
-        """Pick a likely timestamp column for plain CSV files."""
-        preferred_names = {"timestamp", "time", "datetime", "date", "datum", "zeit"}
-        for index, column_name in enumerate(header):
-            normalized_name = column_name.strip().lower()
-            if normalized_name in preferred_names and cls._column_looks_like_timestamp(sample_rows, index):
-                return column_name
-
-        for index, column_name in enumerate(header):
-            if cls._column_looks_like_timestamp(sample_rows, index):
-                return column_name
-        return None
-
-    @classmethod
-    def _column_looks_like_timestamp(cls, rows: list[list[str]], index: int) -> bool:
-        """Return True when at least one non-empty sample cell parses as a timestamp."""
-        for row in rows[:50]:
-            value = cls._get_row_value(row, index).strip()
-            if not value:
-                continue
-            if cls._try_parse_timestamp(value) is not None:
-                return True
-        return False
-
-    @staticmethod
-    def _try_parse_timestamp(value: str) -> datetime | None:
-        """Parse common timestamp formats used by generic CSV files."""
-        for fmt in (
-            "%Y-%m-%d %H:%M:%S",
-            "%Y-%m-%d %H:%M",
-            "%Y-%m-%dT%H:%M:%S",
-            "%Y-%m-%dT%H:%M",
-            "%d.%m.%Y %H:%M:%S",
-            "%d.%m.%Y %H:%M",
-            "%d/%m/%Y %H:%M:%S",
-            "%d/%m/%Y %H:%M",
-            "%m/%d/%Y %H:%M:%S",
-            "%m/%d/%Y %H:%M",
-            "%Y-%m-%d",
-            "%d.%m.%Y",
-            "%d/%m/%Y",
-            "%m/%d/%Y",
-        ):
-            try:
-                return datetime.strptime(value, fmt)
-            except ValueError:
-                continue
-        try:
-            return datetime.fromisoformat(value)
-        except ValueError:
-            return None
-
 
 def main() -> int:
     """Start the desktop application."""

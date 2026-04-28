@@ -8,7 +8,7 @@ Kleines Python-CLI zum Auswerten von CSV-Log-Dateien aus dem Terminal. Das Skrip
 - Auswahl von `system-name`, `record-type` und beliebigen CSV-Spalten
 - Auswahl eines Zeitfensters ueber Start- und Endzeit
 - Automatische Nachinstallation von `matplotlib` beim ersten Start
-- PNG-Ausgabe in `scripts/output`
+- PNG-Ausgabe in `output`
 - Konsolenausgabe mit `min`, `max` und `mean` je Spalte
 - Zweites CLI zum Finden von Schwellwert-Ueber- und -Unterschreitungen
 - technische Dokumentation der Modul-Abhaengigkeiten unter `docs/`
@@ -32,20 +32,39 @@ Fuer spaetere Wartung gibt es zusaetzliche Projektdokumentation:
 Fuer eine grafische Auswahl von CSV-Datei, Datensatz und Spalten:
 
 ```powershell
-python .\plotter\csv_plotter.py
+python .\main\csv_plotter.py
 ```
 
 Das Tool bietet:
 
 - Dateiauswahl fuer beliebige CSV-Dateien
+- Drag & Drop von CSV-Dateien direkt auf das Plotter-Fenster
 - Unterstuetzung fuer das bisherige APS/APU-Mehrblockformat
 - Unterstuetzung fuer normale CSV-Dateien mit einer Header-Zeile
 - automatische Erkennung einer Zeitspalte bei Standard-CSV-Dateien
 - waehlbare X-Achse bei allen CSV-Dateien: Zeilennummer oder beliebige CSV-Spalte
 - Auswahl von `Record Type` und `System` bei APS/APU-Dateien
 - Auswahl der vorhandenen numerischen Spalten
-- interaktiven Plot mit Toolbar fuer Zoom, Pan und Reset
+- interaktiven Plot mit Toolbar fuer Zoom, Pan, Reset und Speichern
+- Mausrad-Zoom direkt auf die aktuelle Cursor-Position
+- Verschieben des Plot-Ausschnitts mit gedrueckter mittlerer Maustaste
+- Data-Picker per Linksklick auf den Plot: der naechste Messpunkt wird markiert und mit X-/Y-Wert angezeigt
+- CSV-Export des aktuell zusammengestellten Plots ueber `Datei > Export`
+- Light- und Dark-Mode ueber `Ansicht`
 - X-Achse mit Datum und Uhrzeit
+
+Bedienung im Plot:
+
+- `Mausrad`: zoomt immer auf die Position des Mauszeigers, unabhaengig vom Toolbar-Modus
+- `Mittlere Maustaste ziehen`: verschiebt den sichtbaren Plot-Ausschnitt
+- `Linksklick`: zeigt den naechstgelegenen Messpunkt als Marker, Tooltip und Statuszeilentext
+- `Toolbar`: bietet zusaetzlich die Matplotlib-Standardfunktionen wie Home, Back, Forward, Zoom, Pan und Speichern
+
+CSV-Export im GUI:
+
+- `Datei > Export > Gesamten Plot exportieren`: exportiert alle aktuell geplotteten Datenpunkte
+- `Datei > Export > Sichtbaren Ausschnitt exportieren`: exportiert nur Datenpunkte innerhalb der aktuellen X- und Y-Achsengrenzen
+- Die Export-CSV enthaelt die aktuelle X-Achse als erste Spalte und danach alle aktuell geplotteten Y-Spalten.
 
 Fuer Standard-CSV-Dateien gilt:
 
@@ -64,13 +83,13 @@ Fuer APS/APU-Dateien gilt:
 Aus dem Projektverzeichnis:
 
 ```powershell
-python .\scripts\log_analyzer.py .\APS-001249_20260424_000000.csv
+python .\main\log_analyzer.py .\APS-001249_20260424_000000.csv
 ```
 
 Mehrere Dateien gleichzeitig:
 
 ```powershell
-python .\scripts\log_analyzer.py `
+python .\main\log_analyzer.py `
   .\APS-001249_20260424_000000.csv `
   .\APS-001249_20260425_000000.csv
 ```
@@ -78,7 +97,7 @@ python .\scripts\log_analyzer.py `
 Mit anderen Spalten oder anderem Zielsystem:
 
 ```powershell
-python .\scripts\log_analyzer.py `
+python .\main\log_analyzer.py `
   .\APS-001249_20260424_000000.csv `
   --system-name "APU 2" `
   --record-type "APU Stat 10s" `
@@ -94,7 +113,7 @@ python .\scripts\log_analyzer.py `
 Finde Zeitstempel, an denen Spannungen unter `620 V` fallen oder ueber `650 V` steigen:
 
 ```powershell
-python .\scripts\peak_finder.py `
+python .\main\peak_finder.py `
   .\APS-001249_20260424_000000.csv `
   --columns "VL12/V" "VL23/V" "VL31/V" `
   --threshold-low 620 `
@@ -133,5 +152,5 @@ Pro Eingabedatei erzeugt das Tool:
 Standard-Ausgabeordner:
 
 ```text
-scripts/output
+output
 ```
