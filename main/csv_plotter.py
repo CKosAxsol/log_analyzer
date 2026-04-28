@@ -94,7 +94,7 @@ class CsvPlotterApp:
         self.x_axis_var = tk.StringVar(value="Datum + Zeit")
         self.status_var = tk.StringVar(value="CSV laden, dann Record Type, System und Spalten waehlen.")
         self.has_plot = False
-        self.theme_name = "dark"
+        self.theme_name = "light"
 
         self._build_menu()
         self._configure_styles()
