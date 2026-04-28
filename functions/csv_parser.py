@@ -17,7 +17,12 @@ TIMESTAMP_FORMAT = "%Y-%m-%d %H:%M:%S"
 
 
 def open_csv_with_fallbacks(csv_path: Path) -> StringIO:
-    """Read CSV text using a small encoding fallback chain."""
+    """Read CSV text using a small encoding fallback chain.
+
+    APS/APU exports are not guaranteed to use one stable encoding.
+    We therefore try a short list of common encodings and return an
+    in-memory text handle so the caller can use it like an open file.
+    """
     last_error: Exception | None = None
     for encoding in DEFAULT_ENCODINGS:
         try:
@@ -37,7 +42,17 @@ def parse_csv(
     columns: Iterable[str],
     delimiter: str,
 ) -> ParsedSeries:
-    """Extract one logical time series block from the semicolon-separated export."""
+    """Extract one logical time series block from the semicolon-separated export.
+
+    The APS/APU files are not "normal" CSV files with a single header row.
+    They contain multiple logical tables in one physical file:
+
+    - one schema row per record type
+    - many data rows below that schema
+
+    This function selects exactly one such logical table by combining
+    `record_type` and `system_name`.
+    """
     selected_columns = list(columns)
     header_map: dict[str, int] | None = None
     timestamps: list[datetime] = []
@@ -49,7 +64,9 @@ def parse_csv(
             if not row or len(row) < 3:
                 continue
             if row[0] == record_type and row[2] == TIMESTAMP_COLUMN:
-                # The schema row appears in the same file as the data rows.
+                # In this export format the schema is embedded in the same file.
+                # We cache the column positions once and reuse them for the
+                # matching data rows that follow later in the file.
                 header_map = {name: idx for idx, name in enumerate(row)}
                 continue
             if row[0] != record_type or row[1] != system_name:
@@ -92,7 +109,11 @@ def parse_data_row(
     csv_path: Path,
     selected_columns: list[str],
 ) -> tuple[datetime | None, list[float] | None]:
-    """Parse one CSV row into timestamp and numeric values."""
+    """Parse one CSV row into timestamp and numeric values.
+
+    Invalid numeric/timestamp cells are treated as bad data rows and skipped.
+    Missing columns are treated as a structural file error and raise.
+    """
     try:
         timestamp = datetime.strptime(row[header_map[TIMESTAMP_COLUMN]], TIMESTAMP_FORMAT)
         values = [float(row[header_map[column]]) for column in selected_columns]

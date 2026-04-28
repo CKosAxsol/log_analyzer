@@ -9,7 +9,12 @@ from .models import ParsedSeries
 
 
 def print_summary(parsed: ParsedSeries, columns: list[str], output_path: Path) -> None:
-    """Print a compact summary for the processed file."""
+    """Print a compact summary for the processed file.
+
+    The console output is intentionally short: it should answer
+    "what file was processed, what was produced, and what were the
+    rough value ranges?" without forcing the user to open the PNG.
+    """
     print(f"File: {parsed.csv_path}")
     print(f"Rows: {len(parsed.timestamps)}")
     print(f"Plot: {output_path}")

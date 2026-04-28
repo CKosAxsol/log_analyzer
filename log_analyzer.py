@@ -15,6 +15,8 @@ ensure_dependencies()
 
 import matplotlib  # noqa: E402
 
+# The CLI writes PNG files only. Using the non-interactive backend avoids
+# GUI requirements and makes the script usable on headless systems.
 matplotlib.use("Agg")
 
 from functions.plotting import plot_series  # noqa: E402
@@ -27,7 +29,11 @@ def process_file(
     columns: list[str],
     output_dir: Path,
 ) -> None:
-    """Parse, filter, plot, and report for one CSV file."""
+    """Parse, filter, plot, and report for one CSV file.
+
+    The processing order is intentionally linear:
+    parse -> optional time filter -> plot -> console summary.
+    """
     parsed = parse_csv(
         csv_path=csv_path,
         system_name=args.system_name,
@@ -54,7 +60,11 @@ def process_file(
 
 
 def main() -> int:
-    """Program entry point."""
+    """Program entry point.
+
+    We continue processing the remaining files even if one file fails so a
+    batch run can still produce partial results.
+    """
     args = parse_args()
     output_dir = Path(args.output_dir)
     columns = list(args.columns)

@@ -23,6 +23,8 @@ def find_threshold_events(
         if len(values) < 2:
             continue
         for idx in range(1, len(values)):
+            # Threshold crossings are detected on the transition between
+            # two neighboring samples, not on isolated absolute values.
             previous_value = values[idx - 1]
             current_value = values[idx]
             timestamp = parsed.timestamps[idx]
@@ -53,10 +55,18 @@ def find_threshold_events(
 
 
 def crossed_below(previous_value: float, current_value: float, threshold: float) -> bool:
-    """Return True when the signal enters the below-threshold region."""
+    """Return True when the signal enters the below-threshold region.
+
+    We only report the actual crossing moment. Staying below the threshold
+    for many following rows does not create duplicate events.
+    """
     return previous_value >= threshold and current_value < threshold
 
 
 def crossed_above(previous_value: float, current_value: float, threshold: float) -> bool:
-    """Return True when the signal enters the above-threshold region."""
+    """Return True when the signal enters the above-threshold region.
+
+    We only report the actual crossing moment. Staying above the threshold
+    for many following rows does not create duplicate events.
+    """
     return previous_value <= threshold and current_value > threshold

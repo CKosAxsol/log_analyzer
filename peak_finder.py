@@ -76,13 +76,21 @@ def parse_args() -> argparse.Namespace:
 
 
 def validate_threshold_args(args: argparse.Namespace) -> None:
-    """Reject calls that do not request any threshold search."""
+    """Reject calls that do not request any threshold search.
+
+    Without at least one threshold the tool would parse the file but have
+    no actual condition to evaluate.
+    """
     if args.threshold_low is None and args.threshold_high is None:
         raise ValueError("Use at least one of --threshold-low or --threshold-high")
 
 
 def process_file(csv_path: Path, args: argparse.Namespace) -> None:
-    """Parse, filter, detect events, and print them for one CSV file."""
+    """Parse, filter, detect events, and print them for one CSV file.
+
+    This mirrors the same staged pipeline as `log_analyzer.py`, but swaps
+    plotting/reporting for threshold detection/reporting.
+    """
     parsed = parse_csv(
         csv_path=csv_path,
         system_name=args.system_name,
@@ -105,7 +113,11 @@ def process_file(csv_path: Path, args: argparse.Namespace) -> None:
 
 
 def main() -> int:
-    """Program entry point."""
+    """Program entry point.
+
+    Argument errors are handled before file processing starts so the user
+    gets immediate feedback for invalid calls.
+    """
     try:
         args = parse_args()
     except Exception as exc:

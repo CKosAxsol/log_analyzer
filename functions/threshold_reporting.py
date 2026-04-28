@@ -8,7 +8,13 @@ from .models import ThresholdEvent
 
 
 def print_threshold_summary(events: list[ThresholdEvent]) -> None:
-    """Print all detected threshold events grouped by column."""
+    """Print all detected threshold events grouped by column.
+
+    The output is split into:
+
+    - a short count per column for a quick overview
+    - the detailed event list for exact timestamps
+    """
     if not events:
         print("No threshold crossings found in the selected time range.")
         return

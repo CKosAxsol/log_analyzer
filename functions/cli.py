@@ -9,7 +9,12 @@ DEFAULT_COLUMNS = ["VL12/V", "VL23/V", "VL31/V"]
 
 
 def parse_args() -> argparse.Namespace:
-    """Build and parse the command line interface."""
+    """Build and parse the command line interface.
+
+    This module only defines CLI arguments. The actual work is done in the
+    parser, filter, plotting, and reporting modules so each responsibility
+    stays easy to understand and test in isolation.
+    """
     parser = argparse.ArgumentParser(
         description=(
             "Read APS/APU CSV files, extract selected voltage columns, "

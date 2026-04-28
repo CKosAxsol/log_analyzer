@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import csv
+from datetime import datetime
 from pathlib import Path
 import sys
 
@@ -11,7 +12,7 @@ ROOT_DIR = Path(__file__).resolve().parents[1]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
-from functions.csv_parser import TIMESTAMP_COLUMN, open_csv_with_fallbacks, parse_csv
+from functions.csv_parser import TIMESTAMP_COLUMN, open_csv_with_fallbacks
 from functions.dependencies import ensure_dependencies
 
 ensure_dependencies()
@@ -60,7 +61,18 @@ THEMES = {
 
 
 class CsvPlotterApp:
-    """Desktop UI for selecting CSV columns and plotting them interactively."""
+    """Desktop UI for selecting CSV columns and plotting them interactively.
+
+    The UI supports two file structures:
+
+    - APS/APU exports with multiple logical tables in one file
+    - regular CSV files with one header row
+
+    Both end up in the same plotting path: choose X-axis values, choose
+    numeric Y columns, then render the selected series.
+    """
+
+    ROW_INDEX_LABEL = "Zeilennummer"
 
     def __init__(self, root: tk.Tk) -> None:
         self.root = root
@@ -68,6 +80,9 @@ class CsvPlotterApp:
         self.root.geometry("1400x900")
 
         self.csv_path: Path | None = None
+        self.csv_mode = "structured"
+        self.timestamp_column: str | None = None
+        self.plain_columns: list[str] = []
         self.record_columns: dict[str, list[str]] = {}
         self.record_systems: dict[str, list[str]] = {}
         self.numeric_columns: dict[tuple[str, str], list[str]] = {}
@@ -76,6 +91,7 @@ class CsvPlotterApp:
         self.delimiter_var = tk.StringVar(value=";")
         self.record_type_var = tk.StringVar()
         self.system_name_var = tk.StringVar()
+        self.x_axis_var = tk.StringVar(value="Datum + Zeit")
         self.status_var = tk.StringVar(value="CSV laden, dann Record Type, System und Spalten waehlen.")
         self.has_plot = False
         self.theme_name = "dark"
@@ -194,10 +210,19 @@ class CsvPlotterApp:
         self.system_box.grid(row=8, column=0, sticky="ew", pady=(4, 0))
         self.system_box.bind("<<ComboboxSelected>>", self.on_system_changed)
 
-        ttk.Label(controls, text="Spalten", style="Panel.TLabel").grid(row=9, column=0, sticky="w", pady=(16, 0))
+        ttk.Label(controls, text="X-Achse", style="Panel.TLabel").grid(row=9, column=0, sticky="w", pady=(16, 0))
+        self.x_axis_box = ttk.Combobox(
+            controls,
+            textvariable=self.x_axis_var,
+            state="readonly",
+            width=38,
+        )
+        self.x_axis_box.grid(row=10, column=0, sticky="ew", pady=(4, 0))
+
+        ttk.Label(controls, text="Spalten", style="Panel.TLabel").grid(row=11, column=0, sticky="w", pady=(16, 0))
         list_frame = ttk.Frame(controls, style="Panel.TFrame")
-        list_frame.grid(row=10, column=0, sticky="nsew", pady=(4, 0))
-        controls.rowconfigure(10, weight=1)
+        list_frame.grid(row=12, column=0, sticky="nsew", pady=(4, 0))
+        controls.rowconfigure(12, weight=1)
         list_frame.rowconfigure(0, weight=1)
         list_frame.columnconfigure(0, weight=1)
 
@@ -216,7 +241,7 @@ class CsvPlotterApp:
         self.column_list.configure(yscrollcommand=scrollbar.set)
 
         button_row = ttk.Frame(controls)
-        button_row.grid(row=11, column=0, sticky="ew", pady=(12, 0))
+        button_row.grid(row=13, column=0, sticky="ew", pady=(12, 0))
         button_row.columnconfigure(0, weight=1)
         button_row.columnconfigure(1, weight=1)
         ttk.Button(button_row, text="Alle waehlen", command=self.select_all_columns).grid(
@@ -227,7 +252,7 @@ class CsvPlotterApp:
         )
 
         ttk.Button(controls, text="Plot anzeigen", command=self.plot_selected_columns).grid(
-            row=12, column=0, sticky="ew", pady=(12, 0)
+            row=14, column=0, sticky="ew", pady=(12, 0)
         )
         ttk.Label(
             controls,
@@ -235,7 +260,7 @@ class CsvPlotterApp:
             wraplength=320,
             justify=tk.LEFT,
             style="Panel.TLabel",
-        ).grid(row=13, column=0, sticky="w", pady=(12, 0))
+        ).grid(row=15, column=0, sticky="w", pady=(12, 0))
 
         plot_frame = ttk.Frame(main)
         plot_frame.grid(row=0, column=1, sticky="nsew")
@@ -332,19 +357,52 @@ class CsvPlotterApp:
         if record_types:
             self.record_type_var.set(record_types[0])
             self.on_record_type_changed()
-            self.status_var.set(
-                f"Datei geladen: {self.csv_path.name}. Record Type, System und Spalten auswaehlen."
-            )
+            if self.csv_mode == "plain":
+                if self.timestamp_column is not None:
+                    self.status_var.set(
+                        f"Datei geladen: {self.csv_path.name}. Standard-CSV erkannt, Zeitspalte: {self.timestamp_column}."
+                    )
+                else:
+                    self.status_var.set(
+                        f"Datei geladen: {self.csv_path.name}. Standard-CSV ohne Zeitspalte erkannt, X-Achse = Zeilennummer."
+                    )
+            else:
+                self.status_var.set(
+                    f"Datei geladen: {self.csv_path.name}. Record Type, System, X-Achse und Spalten auswaehlen."
+                )
         else:
             self._reset_selectors()
             self.status_var.set("Keine auswertbaren Datensaetze in der CSV gefunden.")
 
     def _load_metadata(self) -> None:
-        """Discover record types, systems, and numeric columns inside the CSV."""
+        """Discover record types, systems, and numeric columns inside the CSV.
+
+        We detect the file structure first, because APS/APU exports need a
+        different metadata scan than a standard one-header CSV.
+        """
         if self.csv_path is None:
             raise ValueError("Es wurde keine CSV-Datei ausgewaehlt.")
 
         delimiter = self._get_delimiter()
+        self.csv_mode = "structured"
+        self.timestamp_column = None
+        self.plain_columns = []
+        with open_csv_with_fallbacks(self.csv_path) as probe_handle:
+            probe_reader = csv.reader(probe_handle, delimiter=delimiter)
+            for row in probe_reader:
+                if not row:
+                    continue
+                if len(row) >= 3 and row[2].strip() == TIMESTAMP_COLUMN:
+                    self._load_structured_metadata(delimiter)
+                    return
+        self._load_plain_metadata(delimiter)
+
+    def _load_structured_metadata(self, delimiter: str) -> None:
+        """Load metadata for the existing APS/APU export structure.
+
+        APS/APU files contain multiple record blocks. Each block has its own
+        schema row and then many data rows for one or more systems.
+        """
         record_columns: dict[str, list[str]] = {}
         record_systems: dict[str, set[str]] = {}
         numeric_columns: dict[tuple[str, str], set[str]] = {}
@@ -361,6 +419,8 @@ class CsvPlotterApp:
                 third_cell = row[2].strip()
 
                 if third_cell == TIMESTAMP_COLUMN:
+                    # The schema row defines the available columns for this
+                    # record type. Later data rows are interpreted against it.
                     columns = [value.strip() for value in row[3:] if value.strip()]
                     record_columns[record_type] = columns
                     header_map_by_record[record_type] = {
@@ -403,6 +463,47 @@ class CsvPlotterApp:
             ]
             self.numeric_columns[key] = ordered_columns
 
+    def _load_plain_metadata(self, delimiter: str) -> None:
+        """Load metadata for a regular CSV with one header row.
+
+        For standard CSV files we expose every numeric column as a possible
+        Y series and every header column as a possible X-axis source.
+        """
+        if self.csv_path is None:
+            raise ValueError("Es wurde keine CSV-Datei ausgewaehlt.")
+
+        with open_csv_with_fallbacks(self.csv_path) as handle:
+            reader = csv.reader(handle, delimiter=delimiter)
+            header = next(reader, None)
+            if header is None:
+                raise ValueError("Die CSV-Datei ist leer.")
+
+            normalized_header = self._normalize_header(header)
+            if not normalized_header:
+                raise ValueError("Die CSV-Datei enthaelt keine gueltige Header-Zeile.")
+
+            sample_rows = [row for row in reader if any(cell.strip() for cell in row)]
+
+        self.csv_mode = "plain"
+        self.plain_columns = normalized_header
+        self.timestamp_column = self._detect_timestamp_column(normalized_header, sample_rows)
+
+        numeric_columns: list[str] = []
+        for index, column_name in enumerate(normalized_header):
+            if column_name == self.timestamp_column:
+                continue
+            if any(self._is_float_row_value(row, index) for row in sample_rows):
+                numeric_columns.append(column_name)
+
+        if not numeric_columns:
+            raise ValueError("Keine numerischen Spalten in der CSV gefunden.")
+
+        record_type = "CSV"
+        system_name = "Alle Daten"
+        self.record_columns = {record_type: numeric_columns}
+        self.record_systems = {record_type: [system_name]}
+        self.numeric_columns = {(record_type, system_name): numeric_columns}
+
     def _get_delimiter(self) -> str:
         """Return the configured delimiter or fail with a user-friendly message."""
         delimiter = self.delimiter_var.get()
@@ -415,10 +516,15 @@ class CsvPlotterApp:
         self.record_columns = {}
         self.record_systems = {}
         self.numeric_columns = {}
+        self.csv_mode = "structured"
+        self.timestamp_column = None
+        self.plain_columns = []
         self.record_type_var.set("")
         self.system_name_var.set("")
+        self.x_axis_var.set("Datum + Zeit")
         self.record_type_box["values"] = []
         self.system_box["values"] = []
+        self.x_axis_box["values"] = []
         self._set_column_values([])
 
     def on_record_type_changed(self, _event: object | None = None) -> None:
@@ -439,9 +545,29 @@ class CsvPlotterApp:
         if not columns:
             columns = self.record_columns.get(self.record_type_var.get(), [])
         self._set_column_values(columns)
+        self._update_x_axis_options()
         self.status_var.set(
             f"{len(columns)} Spalten verfuegbar fuer {self.record_type_var.get()} / {self.system_name_var.get()}."
         )
+
+    def _update_x_axis_options(self) -> None:
+        """Refresh X-axis choices for the current CSV mode.
+
+        APS/APU and plain CSV files expose X values differently, but the UI
+        presents both through the same selector widget.
+        """
+        if self.csv_mode == "plain":
+            values = [self.ROW_INDEX_LABEL, *self.plain_columns]
+            self.x_axis_box["values"] = values
+            preferred_value = self.timestamp_column or self.ROW_INDEX_LABEL
+            if self.x_axis_var.get() not in values:
+                self.x_axis_var.set(preferred_value)
+        else:
+            record_type = self.record_type_var.get()
+            values = [self.ROW_INDEX_LABEL, TIMESTAMP_COLUMN, *self.record_columns.get(record_type, [])]
+            self.x_axis_box["values"] = values
+            if self.x_axis_var.get() not in values:
+                self.x_axis_var.set(TIMESTAMP_COLUMN)
 
     def _set_column_values(self, columns: list[str]) -> None:
         """Replace the listbox content with the given columns."""
@@ -469,13 +595,7 @@ class CsvPlotterApp:
             return
 
         try:
-            parsed = parse_csv(
-                csv_path=self.csv_path,
-                system_name=self.system_name_var.get(),
-                record_type=self.record_type_var.get(),
-                columns=selected_columns,
-                delimiter=self._get_delimiter(),
-            )
+            x_values, series_map, title_suffix, x_label = self._load_selected_series(selected_columns)
         except Exception as exc:
             messagebox.showerror("Plot fehlgeschlagen", str(exc))
             self.status_var.set("Plot konnte nicht erstellt werden.")
@@ -484,27 +604,320 @@ class CsvPlotterApp:
         self.axes.clear()
         self._style_axes()
         for column in selected_columns:
-            self.axes.plot(parsed.timestamps, parsed.series[column], label=column, linewidth=1.2)
+            self.axes.plot(x_values, series_map[column], label=column, linewidth=1.2)
 
-        locator = mdates.AutoDateLocator()
-        self.axes.xaxis.set_major_locator(locator)
-        self.axes.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d %H:%M:%S"))
-        self.axes.set_title(f"{parsed.csv_path.name}\n{parsed.record_type} | {parsed.system_name}")
-        self.axes.set_xlabel("Datum + Zeit")
+        if x_values and isinstance(x_values[0], datetime):
+            locator = mdates.AutoDateLocator()
+            self.axes.xaxis.set_major_locator(locator)
+            self.axes.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d %H:%M:%S"))
+            self.figure.autofmt_xdate()
+
+        self.axes.set_title(f"{self.csv_path.name}\n{title_suffix}")
+        self.axes.set_xlabel(x_label)
         self.axes.set_ylabel("Wert")
         legend = self.axes.legend(loc="best")
         legend.get_frame().set_facecolor(THEMES[self.theme_name]["input"])
         legend.get_frame().set_edgecolor(THEMES[self.theme_name]["grid"])
         for text in legend.get_texts():
             text.set_color(THEMES[self.theme_name]["text"])
-        self.figure.autofmt_xdate()
         self.canvas.draw_idle()
         self.toolbar.update()
         self.has_plot = True
 
         self.status_var.set(
-            f"Plot aktualisiert: {len(selected_columns)} Spalten, {len(parsed.timestamps)} Datenpunkte."
+            f"Plot aktualisiert: {len(selected_columns)} Spalten, {len(x_values)} Datenpunkte."
         )
+
+    def _load_selected_series(
+        self,
+        selected_columns: list[str],
+    ) -> tuple[list[datetime] | list[int] | list[float] | list[str], dict[str, list[float]], str, str]:
+        """Load the selected series for either structured or plain CSV files.
+
+        This is the single dispatcher that hides the source file structure
+        from the plotting code below.
+        """
+        if self.csv_path is None:
+            raise ValueError("Es wurde keine CSV-Datei ausgewaehlt.")
+
+        if self.csv_mode == "structured":
+            return self._parse_structured_csv(selected_columns)
+
+        return self._parse_plain_csv(selected_columns)
+
+    def _parse_structured_csv(
+        self,
+        selected_columns: list[str],
+    ) -> tuple[list[datetime] | list[int] | list[float] | list[str], dict[str, list[float]], str, str]:
+        """Parse one APS/APU record block with a selectable X-axis column.
+
+        Compared with the CLI parser, this reader is intentionally more
+        flexible because the GUI allows the user to choose any column as
+        the X axis, not only the timestamp column.
+        """
+        if self.csv_path is None:
+            raise ValueError("Es wurde keine CSV-Datei ausgewaehlt.")
+
+        delimiter = self._get_delimiter()
+        record_type = self.record_type_var.get()
+        system_name = self.system_name_var.get()
+        x_axis_column = self.x_axis_var.get().strip() or TIMESTAMP_COLUMN
+
+        series = {column: [] for column in selected_columns}
+        raw_x_values: list[str] = []
+        header_map: dict[str, int] | None = None
+
+        with open_csv_with_fallbacks(self.csv_path) as handle:
+            reader = csv.reader(handle, delimiter=delimiter)
+            for row in reader:
+                if not row or len(row) < 3:
+                    continue
+
+                if row[0].strip() == record_type and row[2].strip() == TIMESTAMP_COLUMN:
+                    # APS/APU schema rows keep the timestamp in column 2 and
+                    # all named data columns from column 3 onwards.
+                    header_map = {TIMESTAMP_COLUMN: 2}
+                    for idx, value in enumerate(row[3:], start=3):
+                        stripped = value.strip()
+                        if stripped:
+                            header_map[stripped] = idx
+                    continue
+
+                if row[0].strip() != record_type or row[1].strip() != system_name:
+                    continue
+
+                if header_map is None:
+                    raise ValueError(
+                        f"Keine Schema-Zeile fuer Record Type '{record_type}' in {self.csv_path} gefunden."
+                    )
+
+                missing_columns = [column for column in selected_columns if column not in header_map]
+                if missing_columns:
+                    raise ValueError(
+                        "Ausgewaehlte Spalten fehlen in der CSV: " + ", ".join(missing_columns)
+                    )
+                if x_axis_column != self.ROW_INDEX_LABEL and x_axis_column not in header_map:
+                    raise ValueError(f"X-Achsen-Spalte fehlt in der CSV: {x_axis_column}")
+
+                parsed_values: list[float] = []
+                for column in selected_columns:
+                    value = self._get_row_value(row, header_map[column]).strip()
+                    try:
+                        parsed_values.append(float(value))
+                    except ValueError:
+                        parsed_values = []
+                        break
+                if not parsed_values:
+                    continue
+
+                if x_axis_column == self.ROW_INDEX_LABEL:
+                    raw_x_values.append(str(len(raw_x_values) + 1))
+                else:
+                    raw_x_value = self._get_row_value(row, header_map[x_axis_column]).strip()
+                    if not raw_x_value:
+                        continue
+                    raw_x_values.append(raw_x_value)
+
+                for column, value in zip(selected_columns, parsed_values):
+                    series[column].append(value)
+
+        if not raw_x_values:
+            raise ValueError(
+                f"Keine plottbaren Datenzeilen fuer {record_type} / {system_name} gefunden."
+            )
+
+        x_values, x_label, _x_is_datetime = self._convert_x_values(raw_x_values, x_axis_column)
+        title_suffix = f"{record_type} | {system_name} | X-Achse: {x_label}"
+        return x_values, series, title_suffix, x_label
+
+    def _parse_plain_csv(
+        self,
+        selected_columns: list[str],
+    ) -> tuple[list[datetime] | list[int] | list[float] | list[str], dict[str, list[float]], str, str]:
+        """Parse a regular CSV with a single header row.
+
+        Rows are only kept when all selected Y columns can be parsed as
+        numbers. This prevents misaligned X/Y lists.
+        """
+        if self.csv_path is None:
+            raise ValueError("Es wurde keine CSV-Datei ausgewaehlt.")
+
+        delimiter = self._get_delimiter()
+        x_axis_column = self.x_axis_var.get().strip() or self.ROW_INDEX_LABEL
+        series = {column: [] for column in selected_columns}
+        raw_x_values: list[str] = []
+
+        with open_csv_with_fallbacks(self.csv_path) as handle:
+            reader = csv.reader(handle, delimiter=delimiter)
+            header = next(reader, None)
+            if header is None:
+                raise ValueError("Die CSV-Datei ist leer.")
+
+            normalized_header = self._normalize_header(header)
+            header_map = {name: idx for idx, name in enumerate(normalized_header)}
+
+            missing_columns = [column for column in selected_columns if column not in header_map]
+            if missing_columns:
+                raise ValueError(
+                    "Ausgewaehlte Spalten fehlen in der CSV: " + ", ".join(missing_columns)
+                )
+            if x_axis_column != self.ROW_INDEX_LABEL and x_axis_column not in header_map:
+                raise ValueError(f"X-Achsen-Spalte fehlt in der CSV: {x_axis_column}")
+
+            row_index = 0
+            for row in reader:
+                if not any(cell.strip() for cell in row):
+                    continue
+
+                parsed_values: list[float] = []
+                for column in selected_columns:
+                    value = self._get_row_value(row, header_map[column]).strip()
+                    try:
+                        parsed_values.append(float(value))
+                    except ValueError:
+                        parsed_values = []
+                        break
+                if not parsed_values:
+                    continue
+
+                if x_axis_column == self.ROW_INDEX_LABEL:
+                    row_index += 1
+                    raw_x_values.append(str(row_index))
+                else:
+                    raw_x_value = self._get_row_value(row, header_map[x_axis_column]).strip()
+                    if not raw_x_value:
+                        continue
+                    raw_x_values.append(raw_x_value)
+
+                for column, value in zip(selected_columns, parsed_values):
+                    series[column].append(value)
+
+        if not raw_x_values:
+            raise ValueError("Keine plottbaren Datenzeilen fuer die aktuelle Auswahl gefunden.")
+
+        x_values, x_label, x_is_datetime = self._convert_x_values(raw_x_values, x_axis_column)
+        title_suffix = "Standard CSV"
+        if x_axis_column != self.ROW_INDEX_LABEL:
+            title_suffix = f"Standard CSV | X-Achse: {x_axis_column}"
+        elif x_is_datetime:
+            title_suffix = "Standard CSV | X-Achse: Datum + Zeit"
+        return x_values, series, title_suffix, x_label
+
+    def _convert_x_values(
+        self,
+        raw_x_values: list[str],
+        x_axis_column: str,
+    ) -> tuple[list[datetime] | list[int] | list[float] | list[str], str, bool]:
+        """Convert raw X values to datetime, float, or keep them as strings.
+
+        Matplotlib handles these three broad X-axis types differently, so
+        we normalize them once here instead of scattering conversion logic
+        across the parsing code.
+        """
+        if x_axis_column == self.ROW_INDEX_LABEL:
+            return [int(value) for value in raw_x_values], self.ROW_INDEX_LABEL, False
+
+        timestamp_values: list[datetime] = []
+        if all((parsed := self._try_parse_timestamp(value)) is not None for value in raw_x_values):
+            for value in raw_x_values:
+                parsed = self._try_parse_timestamp(value)
+                if parsed is None:
+                    break
+                timestamp_values.append(parsed)
+            if len(timestamp_values) == len(raw_x_values):
+                return timestamp_values, x_axis_column, True
+
+        float_values: list[float] = []
+        try:
+            float_values = [float(value) for value in raw_x_values]
+        except ValueError:
+            return raw_x_values, x_axis_column, False
+        return float_values, x_axis_column, False
+
+    @staticmethod
+    def _normalize_header(header: list[str]) -> list[str]:
+        """Strip header cells and fill empty names with placeholders."""
+        normalized: list[str] = []
+        for index, value in enumerate(header, start=1):
+            stripped = value.strip()
+            normalized.append(stripped if stripped else f"column_{index}")
+        return normalized
+
+    @staticmethod
+    def _get_row_value(row: list[str], index: int) -> str:
+        """Safely return a row value or an empty string when the field is missing."""
+        if index >= len(row):
+            return ""
+        return row[index]
+
+    @classmethod
+    def _is_float_row_value(cls, row: list[str], index: int) -> bool:
+        """Check whether the given cell contains a float-compatible value."""
+        value = cls._get_row_value(row, index).strip()
+        if not value:
+            return False
+        try:
+            float(value)
+        except ValueError:
+            return False
+        return True
+
+    @classmethod
+    def _detect_timestamp_column(
+        cls,
+        header: list[str],
+        sample_rows: list[list[str]],
+    ) -> str | None:
+        """Pick a likely timestamp column for plain CSV files."""
+        preferred_names = {"timestamp", "time", "datetime", "date", "datum", "zeit"}
+        for index, column_name in enumerate(header):
+            normalized_name = column_name.strip().lower()
+            if normalized_name in preferred_names and cls._column_looks_like_timestamp(sample_rows, index):
+                return column_name
+
+        for index, column_name in enumerate(header):
+            if cls._column_looks_like_timestamp(sample_rows, index):
+                return column_name
+        return None
+
+    @classmethod
+    def _column_looks_like_timestamp(cls, rows: list[list[str]], index: int) -> bool:
+        """Return True when at least one non-empty sample cell parses as a timestamp."""
+        for row in rows[:50]:
+            value = cls._get_row_value(row, index).strip()
+            if not value:
+                continue
+            if cls._try_parse_timestamp(value) is not None:
+                return True
+        return False
+
+    @staticmethod
+    def _try_parse_timestamp(value: str) -> datetime | None:
+        """Parse common timestamp formats used by generic CSV files."""
+        for fmt in (
+            "%Y-%m-%d %H:%M:%S",
+            "%Y-%m-%d %H:%M",
+            "%Y-%m-%dT%H:%M:%S",
+            "%Y-%m-%dT%H:%M",
+            "%d.%m.%Y %H:%M:%S",
+            "%d.%m.%Y %H:%M",
+            "%d/%m/%Y %H:%M:%S",
+            "%d/%m/%Y %H:%M",
+            "%m/%d/%Y %H:%M:%S",
+            "%m/%d/%Y %H:%M",
+            "%Y-%m-%d",
+            "%d.%m.%Y",
+            "%d/%m/%Y",
+            "%m/%d/%Y",
+        ):
+            try:
+                return datetime.strptime(value, fmt)
+            except ValueError:
+                continue
+        try:
+            return datetime.fromisoformat(value)
+        except ValueError:
+            return None
 
 
 def main() -> int:

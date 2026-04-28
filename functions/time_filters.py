@@ -11,7 +11,11 @@ TIMESTAMP_FORMAT = "%Y-%m-%d %H:%M:%S"
 
 
 def parse_optional_timestamp(raw_value: str | None, label: str) -> datetime | None:
-    """Parse an optional timestamp argument from the CLI."""
+    """Parse an optional timestamp argument from the CLI.
+
+    The parser lives in this helper instead of the CLI modules so both
+    command line tools validate timestamps in exactly the same way.
+    """
     if raw_value is None:
         return None
     try:
@@ -27,12 +31,18 @@ def filter_series_by_time(
     time_start: datetime | None,
     time_end: datetime | None,
 ) -> ParsedSeries:
-    """Keep only rows within the requested plotting window."""
+    """Keep only rows within the requested plotting window.
+
+    The function returns a new `ParsedSeries` instead of mutating the input.
+    This keeps downstream functions simple because they can trust that
+    `ParsedSeries` values never change behind their back.
+    """
     if time_start is None and time_end is None:
         return parsed
     if time_start is not None and time_end is not None and time_start > time_end:
         raise ValueError("--time-start must be earlier than or equal to --time-end")
 
+    # We collect indices first so timestamps and all value columns stay aligned.
     selected_indices = [
         idx
         for idx, timestamp in enumerate(parsed.timestamps)

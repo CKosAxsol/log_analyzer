@@ -14,7 +14,11 @@ PALETTE = ["#0b6e4f", "#c84c09", "#2b59c3", "#7a1fa2", "#8f6f00", "#008b8b"]
 
 
 def build_output_path(output_dir: Path, csv_path: Path) -> Path:
-    """Create a deterministic PNG path for one input CSV."""
+    """Create a deterministic PNG path for one input CSV.
+
+    Keeping the file name deterministic makes repeated runs predictable:
+    the newest result replaces the older plot for the same input file.
+    """
     return output_dir / f"{csv_path.stem}_spannungen.png"
 
 
@@ -27,7 +31,11 @@ def plot_series(
     y_min: float | None,
     y_max: float | None,
 ) -> Path:
-    """Render the selected time series columns to a PNG file."""
+    """Render the selected time series columns to a PNG file.
+
+    This module knows nothing about CSV parsing details. It only receives
+    already cleaned and aligned series data and turns that into an image.
+    """
     output_dir.mkdir(parents=True, exist_ok=True)
     output_path = build_output_path(output_dir, parsed.csv_path)
 
@@ -35,6 +43,8 @@ def plot_series(
     fig, ax = plt.subplots(figsize=(14, 7), dpi=dpi)
 
     for idx, column in enumerate(columns):
+        # Colors cycle deterministically so the same column order produces
+        # the same visual result across runs.
         ax.plot(
             parsed.timestamps,
             parsed.series[column],
