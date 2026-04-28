@@ -45,7 +45,7 @@ Erzeugt PNG-Plots aus der Kommandozeile.
 
 Findet Schwellwert-Ueber- und -Unterschreitungen.
 
-### `plotter/csv_plotter.py`
+### `csv_plotter.py`
 
 Interaktive GUI fuer CSV-Dateien.
 

@@ -9,7 +9,7 @@ Es gibt drei Einstiegspunkte:
 
 - `log_analyzer.py`
 - `peak_finder.py`
-- `plotter/csv_plotter.py`
+- `csv_plotter.py`
 
 Die ersten beiden sind Terminal-Programme. Der Plotter ist eine kleine GUI.
 
@@ -67,7 +67,7 @@ peak_finder.py
 
 ## 3. Abhaengigkeiten der GUI
 
-### `plotter/csv_plotter.py`
+### `csv_plotter.py`
 
 Verantwortung:
 
@@ -80,7 +80,7 @@ Verantwortung:
 Abhaengigkeiten:
 
 ```text
-plotter/csv_plotter.py
+csv_plotter.py
  -> functions.dependencies.ensure_dependencies
  -> functions.csv_parser.open_csv_with_fallbacks
  -> functions.csv_parser.TIMESTAMP_COLUMN
@@ -207,7 +207,7 @@ Aktuell genutzt von:
 ```text
 functions.dependencies
  -> verwendet von log_analyzer.py
- -> verwendet von plotter/csv_plotter.py
+ -> verwendet von csv_plotter.py
 ```
 
 ### `functions/path_utils.py`
@@ -276,6 +276,6 @@ CSV-Datei
 - Wenn sich das APS/APU-Dateiformat aendert, zuerst `functions/csv_parser.py`
   und die strukturierten Leser im Plotter pruefen.
 - Wenn sich nur das Plot-Verhalten aendert, moeglichst `functions/plotting.py`
-  oder `plotter/csv_plotter.py` aendern, nicht den Parser.
+  oder `csv_plotter.py` aendern, nicht den Parser.
 - Wenn neue gemeinsame Daten gebraucht werden, zuerst pruefen, ob sie in
   `ParsedSeries` oder in einem neuen Dataclass-Modell sauberer aufgehoben sind.
