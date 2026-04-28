@@ -1,2 +1,4 @@
+# Runtime dependencies that are installed by start_csv_plotter.bat
+# and may also be bootstrapped by functions/dependencies.py.
 matplotlib
 tkinterdnd2

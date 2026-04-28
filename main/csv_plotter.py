@@ -13,9 +13,10 @@ if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
 from functions.csv_parser import TIMESTAMP_COLUMN, open_csv_with_fallbacks
-from functions.dependencies import ensure_dependencies
+from functions.dependencies import ensure_dependencies, ensure_package
 
 ensure_dependencies()
+ensure_package("tkinterdnd2")
 
 try:
     import tkinter as tk
