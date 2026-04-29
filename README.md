@@ -55,6 +55,7 @@ Das Tool bietet:
 - Mausrad-Zoom direkt auf die aktuelle Cursor-Position
 - Verschieben des Plot-Ausschnitts mit gedrueckter mittlerer Maustaste
 - Data-Picker per Linksklick auf den Plot: der naechste Messpunkt wird markiert und mit X-/Y-Wert angezeigt
+- stabiler Neuaufbau des Plots auch dann, wenn vorher bereits ein Messpunkt markiert war
 - CSV-Export des aktuell zusammengestellten Plots ueber `Datei > Export`
 - Light- und Dark-Mode ueber `Ansicht`
 - X-Achse mit Datum und Uhrzeit

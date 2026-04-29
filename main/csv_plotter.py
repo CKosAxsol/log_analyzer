@@ -674,9 +674,11 @@ class CsvPlotterApp:
             self.status_var.set("Plot konnte nicht erstellt werden.")
             return
 
+        # Vor dem Neuaufbau des Diagramms werden vorhandene Marker und
+        # Hinweisfelder entfernt, solange sie noch an der alten Zeichenflaeche haengen.
+        self._clear_picker_artists()
         self.axes.clear()
         self._style_axes()
-        self._clear_picker_artists()
         for column in selected_columns:
             self.axes.plot(x_values, series_map[column], label=column, linewidth=1.2)
 
@@ -760,11 +762,22 @@ class CsvPlotterApp:
     def _clear_picker_artists(self) -> None:
         """Remove the currently visible picker marker and tooltip from the axes."""
         if self.picker_annotation is not None:
-            self.picker_annotation.remove()
+            self._safe_remove_artist(self.picker_annotation)
             self.picker_annotation = None
         if self.picker_marker is not None:
-            self.picker_marker.remove()
+            self._safe_remove_artist(self.picker_marker)
             self.picker_marker = None
+
+    def _safe_remove_artist(self, artist: object) -> None:
+        """Entfernt ein Matplotlib-Objekt nur dann hart, wenn das noch moeglich ist."""
+        try:
+            artist.remove()
+        except (AttributeError, NotImplementedError, ValueError):
+            # Manche Matplotlib-Objekte sind nach einem Achsen-Reset bereits
+            # intern geloest. In diesem Fall reicht es, wenn unsere Referenz
+            # spaeter verworfen wird.
+            if hasattr(artist, "set_visible"):
+                artist.set_visible(False)
 
     def _on_plot_clicked(self, event: object) -> None:
         """Highlight and describe the nearest plotted point after a mouse click."""
