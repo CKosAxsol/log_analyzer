@@ -55,6 +55,30 @@ from functions.csv_plotter_utils import (  # noqa: E402
 from functions.csv_plotter_theme import THEMES  # noqa: E402
 
 
+class CsvPlotterManager:
+    """Verwaltet mehrere Plotter-Fenster innerhalb eines einzigen Tk-Prozesses."""
+
+    def __init__(self, root: tk.Tk) -> None:
+        self.root = root
+        self.windows: list[CsvPlotterApp] = []
+        self.root.withdraw()
+
+    def open_new_window(self) -> "CsvPlotterApp":
+        """Erzeugt ein neues, komplett eigenstaendiges Plotter-Fenster."""
+        window = tk.Toplevel(self.root)
+        app = CsvPlotterApp(window, manager=self)
+        self.windows.append(app)
+        return app
+
+    def close_window(self, app: "CsvPlotterApp") -> None:
+        """Schliesst den Prozess automatisch, wenn das letzte Fenster weg ist."""
+        if app in self.windows:
+            self.windows.remove(app)
+        if not self.windows:
+            self.root.quit()
+            self.root.destroy()
+
+
 class CsvPlotterApp:
     """Desktop UI for selecting CSV columns and plotting them interactively.
 
@@ -69,10 +93,12 @@ class CsvPlotterApp:
 
     ROW_INDEX_LABEL = "Zeilennummer"
 
-    def __init__(self, root: tk.Tk) -> None:
+    def __init__(self, root: tk.Misc, manager: CsvPlotterManager) -> None:
         self.root = root
+        self.manager = manager
         self.root.title("CSV Plotter")
         self.root.geometry("1400x900")
+        self.root.protocol("WM_DELETE_WINDOW", self.close_window)
 
         self.csv_path: Path | None = None
         self.csv_mode = "structured"
@@ -109,6 +135,8 @@ class CsvPlotterApp:
         menu_bar = tk.Menu(self.root)
 
         datei_menu = tk.Menu(menu_bar, tearoff=False)
+        datei_menu.add_command(label="Neues Fenster", command=self.manager.open_new_window)
+        datei_menu.add_separator()
         export_menu = tk.Menu(datei_menu, tearoff=False)
         export_menu.add_command(label="Gesamten Plot exportieren", command=lambda: self.export_current_plot("all"))
         export_menu.add_command(
@@ -116,6 +144,8 @@ class CsvPlotterApp:
             command=lambda: self.export_current_plot("visible"),
         )
         datei_menu.add_cascade(label="Export", menu=export_menu)
+        datei_menu.add_separator()
+        datei_menu.add_command(label="Fenster schliessen", command=self.close_window)
         menu_bar.add_cascade(label="Datei", menu=datei_menu)
 
         ansicht_menu = tk.Menu(menu_bar, tearoff=False)
@@ -333,6 +363,11 @@ class CsvPlotterApp:
         if not dropped_files:
             return
         self.load_csv_path(dropped_files[0])
+
+    def close_window(self) -> None:
+        """Schliesst nur dieses Fenster und laesst andere Instanzen weiterlaufen."""
+        self.root.destroy()
+        self.manager.close_window(self)
 
     def _style_axes(self) -> None:
         """Apply the dark plot palette to the current axes."""
@@ -1081,7 +1116,8 @@ def main() -> int:
         root = TkinterDnD.Tk()
     else:
         root = tk.Tk()
-    CsvPlotterApp(root)
+    manager = CsvPlotterManager(root)
+    manager.open_new_window()
     root.mainloop()
     return 0
 

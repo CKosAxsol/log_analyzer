@@ -43,6 +43,8 @@ python .\main\csv_plotter.py
 
 Das Tool bietet:
 
+- echtes Mehrfenster-Verhalten innerhalb eines einzigen Prozesses
+- neues Plotter-Fenster ueber `Datei > Neues Fenster`
 - Dateiauswahl fuer beliebige CSV-Dateien
 - Drag & Drop von CSV-Dateien direkt auf das Plotter-Fenster
 - Unterstuetzung fuer das bisherige APS/APU-Mehrblockformat
@@ -59,6 +61,8 @@ Das Tool bietet:
 - CSV-Export des aktuell zusammengestellten Plots ueber `Datei > Export`
 - Light- und Dark-Mode ueber `Ansicht`
 - X-Achse mit Datum und Uhrzeit
+
+Wenn mehrere Plotter parallel benoetigt werden, sollten neue Fenster ueber `Datei > Neues Fenster` geoeffnet werden. So laufen alle Fenster im selben Prozess, behalten aber jeweils ihren eigenen Plot-, Zoom- und Auswahlzustand.
 
 Bedienung im Plot:
 
