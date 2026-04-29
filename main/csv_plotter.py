@@ -55,10 +55,12 @@ from functions.csv_plotter_utils import (  # noqa: E402
     normalize_header,
 )
 from functions.csv_plotter_theme import THEMES  # noqa: E402
+from functions.version_utils import read_project_version  # noqa: E402
 
 
+APP_VERSION = read_project_version(ROOT_DIR)
 LOGGER, LOG_FILE_PATH = configure_csv_plotter_logging(ROOT_DIR)
-LOGGER.info("CSV-Plotter-Protokollierung gestartet. Log-Datei: %s", LOG_FILE_PATH)
+LOGGER.info("CSV-Plotter-Protokollierung gestartet. Version: %s | Log-Datei: %s", APP_VERSION, LOG_FILE_PATH)
 
 
 def handle_unexpected_exception(
@@ -138,10 +140,10 @@ class CsvPlotterApp:
     def __init__(self, root: tk.Misc, manager: CsvPlotterManager) -> None:
         self.root = root
         self.manager = manager
-        self.root.title("CSV Plotter")
+        self.root.title(f"CSV Plotter {APP_VERSION}")
         self.root.geometry("1400x900")
         self.root.protocol("WM_DELETE_WINDOW", self.close_window)
-        LOGGER.info("Plotter-Fenster aufgebaut.")
+        LOGGER.info("Plotter-Fenster aufgebaut. Version: %s", APP_VERSION)
 
         self.csv_path: Path | None = None
         self.csv_mode = "structured"
@@ -195,6 +197,10 @@ class CsvPlotterApp:
         ansicht_menu.add_command(label="Dark Mode", command=lambda: self.set_theme("dark"))
         ansicht_menu.add_command(label="Light Mode", command=lambda: self.set_theme("light"))
         menu_bar.add_cascade(label="Ansicht", menu=ansicht_menu)
+
+        hilfe_menu = tk.Menu(menu_bar, tearoff=False)
+        hilfe_menu.add_command(label=f"Version: {APP_VERSION}", state="disabled")
+        menu_bar.add_cascade(label="Hilfe", menu=hilfe_menu)
         self.root.config(menu=menu_bar)
 
     def _configure_styles(self) -> None:
@@ -1182,7 +1188,7 @@ class CsvPlotterApp:
 def main() -> int:
     """Start the desktop application."""
     sys.excepthook = handle_unexpected_exception
-    LOGGER.info("CSV-Plotter wird gestartet.")
+    LOGGER.info("CSV-Plotter wird gestartet. Version: %s", APP_VERSION)
     if TkinterDnD is not None:
         root = TkinterDnD.Tk()
         LOGGER.info("TkinterDnD aktiviert.")

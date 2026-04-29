@@ -3,6 +3,11 @@ setlocal
 cd /d "%~dp0"
 
 set "PYTHON_CMD="
+set "APP_VERSION=unbekannt"
+
+if exist "VERSION" (
+    set /p APP_VERSION=<VERSION
+)
 
 where py >nul 2>nul
 if not errorlevel 1 (
@@ -54,6 +59,8 @@ if not exist ".venv" (
 
 call .venv\Scripts\activate.bat
 if errorlevel 1 goto :error
+
+echo CSV Plotter Version: %APP_VERSION%
 
 python -m pip install --upgrade pip
 if errorlevel 1 goto :error

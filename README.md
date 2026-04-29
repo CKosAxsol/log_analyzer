@@ -18,6 +18,12 @@ Kleines Python-CLI zum Auswerten von CSV-Log-Dateien aus dem Terminal. Das Skrip
 - Python 3.10 oder neuer
 - `pip` verfuegbar im Python-Environment
 
+## Versionierung
+
+Die Projektversion steht zentral in der Datei [VERSION](/c:/_git/log_analyzer/VERSION).
+Diese Nummer wird sowohl vom GUI als auch von `start_csv_plotter.bat` verwendet.
+Wenn du den Stand fuer Kollegen pruefen willst, kannst du die Versionsnummer direkt im Fenstertitel des Plotters oder beim Start der Batch-Datei sehen.
+
 ## Dokumentation
 
 Fuer spaetere Wartung gibt es zusaetzliche Projektdokumentation:
@@ -50,6 +56,7 @@ Oder unter Windows direkt ueber:
 Der Batch-Starter schliesst sein Konsolenfenster automatisch, sobald der Plotter erfolgreich gestartet wurde. Fehler waehrend Vorbereitung und Abhaengigkeitspruefung bleiben weiter im Konsolenfenster sichtbar.
 Waehrend der laufenden Plotter-Oberflaeche werden Meldungen und Fehler in `.\log` als Zeitstempel-Datei abgelegt.
 Beim Start der GUI werden vorhandene Log-Dateien automatisch geprueft. Dateien, die aelter als 30 Tage sind, werden dabei automatisch geloescht.
+Die aktuelle Version wird beim Start kurz in der Konsole ausgegeben und im Plotter-Fenstertitel angezeigt.
 
 Das Tool bietet:
 
