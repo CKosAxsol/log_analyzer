@@ -61,7 +61,12 @@ if errorlevel 1 goto :error
 python -m pip install -r requirements.txt
 if errorlevel 1 goto :error
 
-python main\csv_plotter.py
+if not exist ".venv\Scripts\pythonw.exe" (
+    echo pythonw.exe wurde in der virtuellen Umgebung nicht gefunden.
+    goto :error
+)
+
+start "" ".venv\Scripts\pythonw.exe" "main\csv_plotter.py"
 if errorlevel 1 goto :error
 
 exit /b 0

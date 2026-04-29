@@ -41,6 +41,16 @@ Fuer eine grafische Auswahl von CSV-Datei, Datensatz und Spalten:
 python .\main\csv_plotter.py
 ```
 
+Oder unter Windows direkt ueber:
+
+```powershell
+.\start_csv_plotter.bat
+```
+
+Der Batch-Starter schliesst sein Konsolenfenster automatisch, sobald der Plotter erfolgreich gestartet wurde. Fehler waehrend Vorbereitung und Abhaengigkeitspruefung bleiben weiter im Konsolenfenster sichtbar.
+Waehrend der laufenden Plotter-Oberflaeche werden Meldungen und Fehler in `.\log` als Zeitstempel-Datei abgelegt.
+Beim Start der GUI werden vorhandene Log-Dateien automatisch geprueft. Dateien, die aelter als 30 Tage sind, werden dabei automatisch geloescht.
+
 Das Tool bietet:
 
 - echtes Mehrfenster-Verhalten innerhalb eines einzigen Prozesses
@@ -61,6 +71,8 @@ Das Tool bietet:
 - CSV-Export des aktuell zusammengestellten Plots ueber `Datei > Export`
 - Light- und Dark-Mode ueber `Ansicht`
 - X-Achse mit Datum und Uhrzeit
+- Protokolldateien mit Info- und Fehlermeldungen im Ordner `log`
+- automatische Bereinigung von Log-Dateien aelter als 30 Tage beim GUI-Start
 
 Wenn mehrere Plotter parallel benoetigt werden, sollten neue Fenster ueber `Datei > Neues Fenster` geoeffnet werden. So laufen alle Fenster im selben Prozess, behalten aber jeweils ihren eigenen Plot-, Zoom- und Auswahlzustand.
 

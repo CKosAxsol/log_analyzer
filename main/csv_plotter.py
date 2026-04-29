@@ -7,6 +7,7 @@ import csv
 from datetime import datetime
 from pathlib import Path
 import sys
+import traceback
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 if str(ROOT_DIR) not in sys.path:
@@ -43,6 +44,7 @@ from functions.csv_plotter_interactions import (  # noqa: E402
     pan_axes_from_drag,
     zoom_axes_around_cursor,
 )
+from functions.csv_plotter_logging import configure_csv_plotter_logging, log_exception  # noqa: E402
 from functions.csv_plotter_utils import (  # noqa: E402
     XValue,
     convert_x_values,
@@ -55,6 +57,25 @@ from functions.csv_plotter_utils import (  # noqa: E402
 from functions.csv_plotter_theme import THEMES  # noqa: E402
 
 
+LOGGER, LOG_FILE_PATH = configure_csv_plotter_logging(ROOT_DIR)
+LOGGER.info("CSV-Plotter-Protokollierung gestartet. Log-Datei: %s", LOG_FILE_PATH)
+
+
+def handle_unexpected_exception(
+    exc_type: type[BaseException],
+    exc_value: BaseException,
+    exc_traceback: object,
+) -> None:
+    """Protokolliert ungefangene Prozessfehler in die Log-Datei."""
+    if issubclass(exc_type, KeyboardInterrupt):
+        sys.__excepthook__(exc_type, exc_value, exc_traceback)
+        return
+    LOGGER.error(
+        "Unbehandelter Prozessfehler\n%s",
+        "".join(traceback.format_exception(exc_type, exc_value, exc_traceback)),
+    )
+
+
 class CsvPlotterManager:
     """Verwaltet mehrere Plotter-Fenster innerhalb eines einzigen Tk-Prozesses."""
 
@@ -62,21 +83,42 @@ class CsvPlotterManager:
         self.root = root
         self.windows: list[CsvPlotterApp] = []
         self.root.withdraw()
+        self.root.report_callback_exception = self._handle_tk_exception
+        LOGGER.info("Fensterverwaltung initialisiert.")
 
     def open_new_window(self) -> "CsvPlotterApp":
         """Erzeugt ein neues, komplett eigenstaendiges Plotter-Fenster."""
         window = tk.Toplevel(self.root)
         app = CsvPlotterApp(window, manager=self)
         self.windows.append(app)
+        LOGGER.info("Neues Plotter-Fenster geoeffnet. Aktive Fenster: %s", len(self.windows))
         return app
 
     def close_window(self, app: "CsvPlotterApp") -> None:
         """Schliesst den Prozess automatisch, wenn das letzte Fenster weg ist."""
         if app in self.windows:
             self.windows.remove(app)
+            LOGGER.info("Plotter-Fenster geschlossen. Verbleibende Fenster: %s", len(self.windows))
         if not self.windows:
+            LOGGER.info("Letztes Plotter-Fenster geschlossen. Anwendung wird beendet.")
             self.root.quit()
             self.root.destroy()
+
+    def _handle_tk_exception(
+        self,
+        exc_type: type[BaseException],
+        exc_value: BaseException,
+        exc_traceback: object,
+    ) -> None:
+        """Faengt Tk-Callback-Fehler ab und schreibt sie in die Log-Datei."""
+        LOGGER.error(
+            "Unbehandelter Tk-Fehler\n%s",
+            "".join(traceback.format_exception(exc_type, exc_value, exc_traceback)),
+        )
+        messagebox.showerror(
+            "Unerwarteter Fehler",
+            f"Der Plotter hat einen Fehler protokolliert.\nLog-Datei: {LOG_FILE_PATH}",
+        )
 
 
 class CsvPlotterApp:
@@ -99,6 +141,7 @@ class CsvPlotterApp:
         self.root.title("CSV Plotter")
         self.root.geometry("1400x900")
         self.root.protocol("WM_DELETE_WINDOW", self.close_window)
+        LOGGER.info("Plotter-Fenster aufgebaut.")
 
         self.csv_path: Path | None = None
         self.csv_mode = "structured"
@@ -443,17 +486,21 @@ class CsvPlotterApp:
         path = Path(file_path)
         if path.suffix.lower() != ".csv":
             messagebox.showwarning("Keine CSV", "Bitte eine CSV-Datei ablegen oder auswaehlen.")
+            LOGGER.info("Datei verworfen, weil sie keine CSV ist: %s", path)
             return
         if not path.exists():
             messagebox.showerror("Datei nicht gefunden", str(path))
+            LOGGER.info("CSV-Datei nicht gefunden: %s", path)
             return
 
         self.csv_path = path
         self.file_var.set(str(self.csv_path))
+        LOGGER.info("CSV-Datei wird geladen: %s", self.csv_path)
 
         try:
             self._load_metadata()
         except Exception as exc:
+            log_exception(LOGGER, f"Fehler beim Laden der CSV-Datei: {path}", exc)
             self._reset_selectors()
             messagebox.showerror("CSV konnte nicht geladen werden", str(exc))
             self.status_var.set("Fehler beim Laden der CSV.")
@@ -477,9 +524,16 @@ class CsvPlotterApp:
                 self.status_var.set(
                     f"Datei geladen: {self.csv_path.name}. Record Type, System, X-Achse und Spalten auswaehlen."
                 )
+            LOGGER.info(
+                "CSV-Datei erfolgreich geladen: %s | Modus: %s | Record Types: %s",
+                self.csv_path.name,
+                self.csv_mode,
+                len(record_types),
+            )
         else:
             self._reset_selectors()
             self.status_var.set("Keine auswertbaren Datensaetze in der CSV gefunden.")
+            LOGGER.info("CSV-Datei enthaelt keine auswertbaren Datensaetze: %s", self.csv_path)
 
     def _load_metadata(self) -> None:
         """Discover record types, systems, and numeric columns inside the CSV.
@@ -705,6 +759,7 @@ class CsvPlotterApp:
         try:
             x_values, series_map, title_suffix, x_label = self._load_selected_series(selected_columns)
         except Exception as exc:
+            log_exception(LOGGER, "Fehler beim Erstellen des Plots.", exc)
             messagebox.showerror("Plot fehlgeschlagen", str(exc))
             self.status_var.set("Plot konnte nicht erstellt werden.")
             return
@@ -741,6 +796,13 @@ class CsvPlotterApp:
 
         self.status_var.set(
             f"Plot aktualisiert: {len(selected_columns)} Spalten, {len(x_values)} Datenpunkte."
+        )
+        LOGGER.info(
+            "Plot erstellt: Datei=%s | Spalten=%s | Datenpunkte=%s | X-Achse=%s",
+            self.csv_path.name if self.csv_path is not None else "<unbekannt>",
+            ", ".join(selected_columns),
+            len(x_values),
+            x_label,
         )
 
     def export_current_plot(self, export_scope: str) -> None:
@@ -788,11 +850,18 @@ class CsvPlotterApp:
                 row_indices,
             )
         except Exception as exc:
+            log_exception(LOGGER, f"Fehler beim CSV-Export nach: {output_path}", exc)
             messagebox.showerror("Export fehlgeschlagen", str(exc))
             self.status_var.set("CSV-Export konnte nicht erstellt werden.")
             return
 
         self.status_var.set(f"CSV exportiert: {Path(output_path).name} ({len(row_indices)} Datenpunkte).")
+        LOGGER.info(
+            "Plot exportiert: Ziel=%s | Datenpunkte=%s | Modus=%s",
+            output_path,
+            len(row_indices),
+            export_scope,
+        )
 
     def _clear_picker_artists(self) -> None:
         """Remove the currently visible picker marker and tooltip from the axes."""
@@ -1112,13 +1181,18 @@ class CsvPlotterApp:
 
 def main() -> int:
     """Start the desktop application."""
+    sys.excepthook = handle_unexpected_exception
+    LOGGER.info("CSV-Plotter wird gestartet.")
     if TkinterDnD is not None:
         root = TkinterDnD.Tk()
+        LOGGER.info("TkinterDnD aktiviert.")
     else:
         root = tk.Tk()
+        LOGGER.info("TkinterDnD nicht verfuegbar. Standard-Tk wird verwendet.")
     manager = CsvPlotterManager(root)
     manager.open_new_window()
     root.mainloop()
+    LOGGER.info("CSV-Plotter wurde beendet.")
     return 0
 
 
