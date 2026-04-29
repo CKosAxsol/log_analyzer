@@ -491,8 +491,9 @@ class CsvPlotterApp:
                 third_cell = row[2].strip()
 
                 if third_cell == TIMESTAMP_COLUMN:
-                    # The schema row defines the available columns for this
-                    # record type. Later data rows are interpreted against it.
+                    # Diese Schema-Zeile beschreibt, welche Spalten es fuer
+                    # diesen Record Type gibt. Die spaeteren Datenzeilen werden
+                    # anhand dieser Spaltenliste gelesen.
                     columns = [value.strip() for value in row[3:] if value.strip()]
                     record_columns[record_type] = columns
                     header_map_by_record[record_type] = {
@@ -932,8 +933,8 @@ class CsvPlotterApp:
                     continue
 
                 if row[0].strip() == record_type and row[2].strip() == TIMESTAMP_COLUMN:
-                    # APS/APU schema rows keep the timestamp in column 2 and
-                    # all named data columns from column 3 onwards.
+                    # Bei APS/APU-Dateien steht der Zeitstempel fest in Spalte 2.
+                    # Alle benannten Daten-Spalten beginnen danach ab Spalte 3.
                     header_map = {TIMESTAMP_COLUMN: 2}
                     for idx, value in enumerate(row[3:], start=3):
                         stripped = value.strip()

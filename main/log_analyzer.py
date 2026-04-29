@@ -19,8 +19,9 @@ ensure_dependencies()
 
 import matplotlib  # noqa: E402
 
-# The CLI writes PNG files only. Using the non-interactive backend avoids
-# GUI requirements and makes the script usable on headless systems.
+# Dieses CLI erzeugt nur PNG-Dateien. Darum wird bewusst ein
+# nicht-interaktives Backend verwendet, damit keine grafische Oberflaeche
+# noetig ist und das Skript auch auf einfachen Servern laeuft.
 matplotlib.use("Agg")
 
 from functions.plotting import plot_series  # noqa: E402
@@ -45,7 +46,8 @@ def process_file(
         columns=columns,
         delimiter=args.delimiter,
     )
-    # Time filtering is kept separate so the raw parse function stays reusable.
+    # Die Zeitfilterung bleibt absichtlich getrennt, damit der reine CSV-Parser
+    # auch in anderen Faellen unveraendert wiederverwendet werden kann.
     parsed = filter_series_by_time(
         parsed=parsed,
         time_start=parse_optional_timestamp(args.time_start, "--time-start"),

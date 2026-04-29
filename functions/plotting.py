@@ -43,8 +43,8 @@ def plot_series(
     fig, ax = plt.subplots(figsize=(14, 7), dpi=dpi)
 
     for idx, column in enumerate(columns):
-        # Colors cycle deterministically so the same column order produces
-        # the same visual result across runs.
+        # Die Farben wechseln in einer festen Reihenfolge. So sieht dieselbe
+        # Spaltenauswahl auch bei spaeteren Laeufen wieder gleich aus.
         ax.plot(
             parsed.timestamps,
             parsed.series[column],

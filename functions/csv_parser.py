@@ -64,9 +64,9 @@ def parse_csv(
             if not row or len(row) < 3:
                 continue
             if row[0] == record_type and row[2] == TIMESTAMP_COLUMN:
-                # In this export format the schema is embedded in the same file.
-                # We cache the column positions once and reuse them for the
-                # matching data rows that follow later in the file.
+                # In diesem Exportformat steckt die Spaltenbeschreibung direkt
+                # in derselben Datei. Die gefundenen Spaltenpositionen werden
+                # einmal gemerkt und fuer die passenden Datenzeilen wiederverwendet.
                 header_map = {name: idx for idx, name in enumerate(row)}
                 continue
             if row[0] != record_type or row[1] != system_name:
@@ -121,5 +121,6 @@ def parse_data_row(
     except (KeyError, IndexError) as exc:
         raise ValueError(f"Missing expected column in {csv_path}: {exc}") from exc
     except ValueError:
-        # Skip malformed rows instead of failing the whole file.
+        # Unvollstaendige oder fehlerhafte Zeilen werden uebersprungen, damit
+        # nicht gleich die komplette Datei verworfen werden muss.
         return None, None

@@ -42,7 +42,8 @@ def filter_series_by_time(
     if time_start is not None and time_end is not None and time_start > time_end:
         raise ValueError("--time-start must be earlier than or equal to --time-end")
 
-    # We collect indices first so timestamps and all value columns stay aligned.
+    # Zuerst werden nur die passenden Positionen gesammelt. So bleiben die
+    # Zeitstempel und alle Messreihen sauber synchron.
     selected_indices = [
         idx
         for idx, timestamp in enumerate(parsed.timestamps)

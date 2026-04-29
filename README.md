@@ -24,6 +24,12 @@ Fuer spaetere Wartung gibt es zusaetzliche Projektdokumentation:
 
 - [Projektstruktur](docs/project_structure.md)
 - [Funktions-Abhaengigkeiten](docs/function_dependencies.md)
+- [Architektur](docs/architecture.md)
+- [Lokale Entwicklung](docs/development.md)
+- [Ablaufbeschreibungen](docs/flows/cli_workflows.md)
+- [Architekturentscheidungen](docs/decisions/adr-001-projektstruktur.md)
+- [Manifest: Arbeitsanweisungen](manifest/instructions.md)
+- [Manifest: Abhaengigkeiten](manifest/dependencies.md)
 
 ## Aufruf
 

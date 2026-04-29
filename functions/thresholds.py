@@ -23,8 +23,9 @@ def find_threshold_events(
         if len(values) < 2:
             continue
         for idx in range(1, len(values)):
-            # Threshold crossings are detected on the transition between
-            # two neighboring samples, not on isolated absolute values.
+            # Ein Schwellwert-Ereignis wird nur dann erkannt, wenn der Wert
+            # zwischen zwei direkt benachbarten Messpunkten die Grenze ueber-
+            # oder unterschreitet. Einzelne Werte fuer sich allein reichen nicht.
             previous_value = values[idx - 1]
             current_value = values[idx]
             timestamp = parsed.timestamps[idx]
