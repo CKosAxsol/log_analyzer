@@ -468,7 +468,14 @@ class CsvPlotterApp:
             self.picker_annotation.get_bbox_patch().set_facecolor(colors["input"])
             self.picker_annotation.get_bbox_patch().set_edgecolor(colors["grid"])
             self.picker_annotation.get_bbox_patch().set_alpha(0.95)
-            self.picker_annotation.get_arrow_patch().set_color(colors["grid"])
+            # Matplotlib stellt den Pfeil je nach Version nicht immer ueber
+            # dieselbe Methode bereit. Darum wird hier vorsichtig geprueft,
+            # welcher Zugriff in der aktuellen Installation vorhanden ist.
+            arrow_patch = getattr(self.picker_annotation, "arrow_patch", None)
+            if arrow_patch is None and hasattr(self.picker_annotation, "get_arrow_patch"):
+                arrow_patch = self.picker_annotation.get_arrow_patch()
+            if arrow_patch is not None:
+                arrow_patch.set_color(colors["grid"])
             self.picker_annotation.set_color(colors["text"])
         if self.picker_marker is not None:
             self.picker_marker.set_markerfacecolor(colors["accent"])
